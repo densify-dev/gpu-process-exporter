@@ -67,6 +67,7 @@ ARG SOURCE_URL=https://github.com/densify-dev/gpu-process-exporter
 LABEL org.opencontainers.image.title="GPU Process Exporter" \
       org.opencontainers.image.description="Prometheus exporter for Kubernetes container GPU process metrics" \
       org.opencontainers.image.vendor="Evenkeel Inc. d/b/a Kubex" \
+      org.opencontainers.image.licenses="Apache-2.0" \
       org.opencontainers.image.source="${SOURCE_URL}" \
       org.opencontainers.image.revision="${REVISION}" \
       org.opencontainers.image.version="${VERSION}" \
@@ -79,5 +80,6 @@ RUN apt-get update \
 
 COPY --chmod=755 --from=build /out/${TARGETARCH}/gpu-exporter /usr/local/bin/gpu-exporter
 COPY --chmod=755 entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY --chmod=644 LICENSE NOTICE THIRD_PARTY_LICENSES.md /usr/share/licenses/gpu-process-exporter/
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
