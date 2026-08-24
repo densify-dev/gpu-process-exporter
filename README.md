@@ -24,6 +24,10 @@ DCGM Exporter is still useful for device health and broad GPU telemetry. This ex
 - A deployment model that can mount host paths and run with the permissions needed to inspect host processes.
 - Container IDs that can be resolved from cgroup data under the mounted host `/proc` tree.
 
+## Helm
+
+Helm is the easiest way to use this exporter. [Get the chart here](https://github.com/densify-dev/helm-charts/tree/master/charts/gpu-process-exporter).
+
 ## Configuration
 
 | Variable | Default | Required | Description |
@@ -111,10 +115,6 @@ A Kubernetes deployment must mount at least:
 - Host root at `/host/root`, so `entrypoint.sh` can locate NVML libraries.
 
 The pod needs permissions to read host process metadata and NVIDIA driver libraries. In practice this usually means a privileged DaemonSet or an equivalent security context with the required host mounts.
-
-## Helm
-
-No Helm chart is currently published for this exporter.
 
 ## Support
 
