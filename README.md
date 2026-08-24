@@ -92,13 +92,13 @@ Build local binaries for amd64 and arm64:
 Build a container image without pushing:
 
 ```bash
-DOCKERHUB_TAG=v1.1.0 ./build-docker-image.sh
+DOCKERHUB_TAG=1.1.0 ./build-docker-image.sh
 ```
 
 Push requires an explicit confirmation:
 
 ```bash
-PUSH_IMAGE=true CONFIRM_PUSH=yes DOCKERHUB_TAG=v1.1.0 ./build-docker-image.sh
+PUSH_IMAGE=true CONFIRM_PUSH=yes DOCKERHUB_TAG=1.1.0 ./build-docker-image.sh
 ```
 
 ## Container runtime requirements
