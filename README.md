@@ -2,7 +2,7 @@
 
 GPU Process Exporter is a Kubex Prometheus exporter for Kubernetes nodes with NVIDIA GPUs. It reads per-process GPU data through NVIDIA Management Library, maps host PIDs back to Kubernetes pods and containers, and exposes container-labelled metrics.
 
-The project is owned by Evenkeel Inc. d/b/a Kubex and licensed under Apache License 2.0. The first supported open-source release is `v1.1.0`. Earlier image tags are pre-open-source builds and are unsupported.
+The project is owned by Evenkeel Inc. d/b/a Kubex and licensed under Apache License 2.0. The first supported open-source release is `v1.1.0`. Earlier image tags are pre-open-source builds and are supported by Kubex but do not have their source open.
 
 The canonical image is:
 
