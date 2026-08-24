@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: Apache-2.0
+
+# Ignore everything by default and re-include only build inputs.
+**
+
+!go.mod
+!go.sum
+!cmd/
+!cmd/**
+!pkg/
+!pkg/**
+**/*_test.go
+!entrypoint.sh
