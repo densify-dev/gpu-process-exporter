@@ -45,14 +45,12 @@ jobs:
         run: $(go env GOPATH)/bin/gitleaks git --redact --verbose --report-format=json --report-path=gitleaks-report.json .
       - name: Build image without pushing
         run: docker build --build-arg TARGETARCH=amd64 -t gpu-process-exporter:ci .
-      - name: Install Trivy
-        run: |
-          set -euo pipefail
-          version=0.74.0
-          tmp="$(mktemp -d)"
-          curl -fsSL "https://github.com/aquasecurity/trivy/releases/download/v${version}/trivy_${version}_Linux-64bit.tar.gz" -o "${tmp}/trivy.tar.gz"
-          echo "2ae6fe3ee734b7fdf11335663e18c75ea12dccc76062f09f164a3b0f8be4371a  ${tmp}/trivy.tar.gz" | sha256sum -c -
-          tar -xzf "${tmp}/trivy.tar.gz" -C "${tmp}" trivy
-          install -m 0755 "${tmp}/trivy" "$(go env GOPATH)/bin/trivy"
       - name: Scan image vulnerabilities
-        run: $(go env GOPATH)/bin/trivy image --severity HIGH,CRITICAL --exit-code 1 --format table gpu-process-exporter:ci
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.74.0
+          image-ref: gpu-process-exporter:ci
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+          format: table
