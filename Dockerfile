@@ -54,7 +54,12 @@ RUN set -eux; \
         -asmflags=-trimpath="${TRIMPATH}" \
         -ldflags="-w -s" \
         -o "/out/${TARGETARCH}/gpu-exporter" \
-        cmd/main.go
+        cmd/main.go; \
+    go run github.com/google/go-licenses/v2@v2.0.1 save \
+        --ignore github.com/densify-dev/gpu-process-exporter \
+        --save_path /out/third-party-licenses \
+        ./cmd; \
+    test -n "$(find /out/third-party-licenses -type f -print -quit)"
 
 FROM ${TARGETIMAGE}
 
@@ -80,6 +85,7 @@ RUN apt-get update \
 
 COPY --chmod=755 --from=build /out/${TARGETARCH}/gpu-exporter /usr/local/bin/gpu-exporter
 COPY --chmod=755 entrypoint.sh /usr/local/bin/entrypoint.sh
-COPY --chmod=644 LICENSE NOTICE THIRD_PARTY_LICENSES.md /usr/share/licenses/gpu-process-exporter/
+COPY --from=build /out/third-party-licenses/ /usr/share/licenses/gpu-process-exporter/third-party/
+COPY --chmod=644 LICENSE NOTICE /usr/share/licenses/gpu-process-exporter/
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
