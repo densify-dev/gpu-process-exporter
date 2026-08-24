@@ -3,7 +3,7 @@ module github.com/densify-dev/gpu-process-exporter
 go 1.26.3
 
 require (
-	github.com/NVIDIA/go-nvml v0.13.0-1
+	github.com/NVIDIA/go-nvml v0.13.3-1
 	github.com/prometheus/client_golang v1.23.2
 	github.com/prometheus/client_model v0.6.2
 	k8s.io/api v0.36.1
