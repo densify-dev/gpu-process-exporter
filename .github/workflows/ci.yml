@@ -1,0 +1,45 @@
+# SPDX-License-Identifier: Apache-2.0
+
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Check shell syntax
+        run: bash -n build.sh build-docker-image.sh entrypoint.sh
+      - name: Check formatting
+        run: test -z "$(gofmt -l cmd pkg)"
+      - name: Unit tests
+        run: go test ./...
+      - name: Race tests
+        run: go test -race ./...
+      - name: Build packages
+        run: go build ./...
+      - name: Lint
+        run: make lint
+      - name: Install Gitleaks
+        run: go install github.com/gitleaks/gitleaks/v8@v8.30.1
+      - name: Secret scan
+        run: gitleaks dir --redact=100 --verbose --report-format=json --report-path=gitleaks-report.json .
+      - name: Build image without pushing
+        run: docker build --build-arg TARGETARCH=amd64 -t gpu-process-exporter:ci .
+      - name: Install Trivy
+        run: go install github.com/aquasecurity/trivy/cmd/trivy@v0.74.0
+      - name: Scan image vulnerabilities
+        run: trivy image --severity HIGH,CRITICAL --exit-code 1 --format table gpu-process-exporter:ci

@@ -54,7 +54,6 @@ for TARGETARCH in amd64 arm64; do
     GOOS=linux \
     GOARCH=${TARGETARCH} \
     CGO_ENABLED=1 \
-    CGO_CFLAGS="-Wno-deprecated-declarations" \
     CC=${CC} \
     go build -trimpath \
     -gcflags=-trimpath="${TRIMPATH}" \

@@ -2,7 +2,7 @@
 
 SHELL := /bin/bash
 
-LINTER_VERSION ?= v2.13.1
+LINTER_VERSION ?= v2.12.2
 GO ?= go
 GOPATH ?= $(shell $(GO) env GOPATH)
 GOLANGCI_LINT ?= $(GOPATH)/bin/golangci-lint
@@ -42,7 +42,6 @@ build-binary: clean
 	GOOS=linux \
 	GOARCH=$$TARGETARCH \
 	CGO_ENABLED=1 \
-	CGO_CFLAGS="-Wno-deprecated-declarations" \
 	CC=gcc \
 	$(GO) build -trimpath \
 	-ldflags="-w -s" \
@@ -58,7 +57,8 @@ test: lint
 	@$(GO) test -race ./...
 
 build-docker-image: test
-	@echo "TODO: Building Docker image..."
+	@echo "Building Docker image..."
+	@./build-docker-image.sh
 
 clean:
 	@echo "Cleaning build output..."

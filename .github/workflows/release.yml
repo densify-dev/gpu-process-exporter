@@ -1,0 +1,130 @@
+# SPDX-License-Identifier: Apache-2.0
+
+name: release
+
+on:
+  push:
+    tags:
+      - v*
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version tag to publish, for example v1.1.0
+        required: true
+        type: string
+      approved:
+        description: Type APPROVED after release approval
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+
+env:
+  IMAGE: docker.io/densify/gpu-process-exporter
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: dockerhub
+    if: github.event_name == 'push' || github.event.inputs.approved == 'APPROVED'
+    steps:
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "push" ]; then
+            version="${GITHUB_REF_NAME}"
+          else
+            version="${{ github.event.inputs.version }}"
+          fi
+          case "${version}" in
+            v*) ;;
+            *) echo "Version must start with v." >&2; exit 1 ;;
+          esac
+          case "${version}" in
+            v0.2.0-beta2|v0.2.0-beta3|v1.0.0|latest)
+              echo "Refusing to publish historical or mutable tag ${version}." >&2
+              exit 1
+              ;;
+          esac
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "created=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Check shell syntax
+        run: bash -n build.sh build-docker-image.sh entrypoint.sh
+      - name: Check formatting
+        run: test -z "$(gofmt -l cmd pkg)"
+      - name: Test
+        run: |
+          go test ./...
+          go test -race ./...
+          go build ./...
+          make lint
+      - name: Install scanners
+        run: |
+          go install github.com/gitleaks/gitleaks/v8@v8.30.1
+          go install github.com/aquasecurity/trivy/cmd/trivy@v0.74.0
+      - name: Secret scan
+        run: gitleaks dir --redact=100 --verbose --report-format=json --report-path=gitleaks-report.json .
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e
+      - name: Build scan image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
+        with:
+          context: .
+          load: true
+          push: false
+          platforms: linux/amd64
+          tags: gpu-process-exporter:scan
+          build-args: |
+            TARGETARCH=amd64
+            VERSION=${{ steps.version.outputs.version }}
+            REVISION=${{ github.sha }}
+            CREATED=${{ steps.version.outputs.created }}
+            SOURCE_URL=https://github.com/densify-dev/gpu-process-exporter
+      - name: Scan image vulnerabilities
+        run: trivy image --severity HIGH,CRITICAL --exit-code 1 --format json --output trivy-image.json gpu-process-exporter:scan
+      - name: Upload private scan reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: private-scan-reports
+          path: |
+            gitleaks-report.json
+            trivy-image.json
+          if-no-files-found: ignore
+      - name: Log in to Docker Hub
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Publish image
+        id: build
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64,linux/arm64
+          provenance: mode=max
+          sbom: true
+          tags: ${{ env.IMAGE }}:${{ steps.version.outputs.version }}
+          build-args: |
+            VERSION=${{ steps.version.outputs.version }}
+            REVISION=${{ github.sha }}
+            CREATED=${{ steps.version.outputs.created }}
+            SOURCE_URL=https://github.com/densify-dev/gpu-process-exporter
+      - name: Report digest
+        run: echo "${{ env.IMAGE }}@${{ steps.build.outputs.digest }}"
