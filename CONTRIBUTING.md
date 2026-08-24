@@ -32,4 +32,17 @@ make lint
 
 This project uses Apache License 2.0. Unless you state otherwise, contributions submitted to this repository are licensed under Apache License 2.0.
 
-This project does not require DCO sign-off.
+## Developer Certificate of Origin
+
+This project follows the [Developer Certificate of Origin 1.1](https://developercertificate.org/). Every human-authored commit in a pull request must include a `Signed-off-by` trailer matching the commit author's name and email.
+
+Use Git's sign-off option when creating or updating commits:
+
+```bash
+git commit --signoff
+git commit --amend --signoff
+git rebase --signoff origin/main
+git push --force-with-lease
+```
+
+Use `git commit --signoff` for a new commit. Use `git commit --amend --signoff` to repair the latest commit. After adding sign-offs with `git rebase --signoff origin/main`, update the remote branch with `git push --force-with-lease`.
