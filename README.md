@@ -118,4 +118,4 @@ The pod needs permissions to read host process metadata and NVIDIA driver librar
 
 ## Support
 
-Support is best effort. Kubex does not provide an SLA or a backport promise for this open-source release.
+Support is best effort. Kubex does not provide an SLA or a backport promise for this exporter unless otherwise agreed.
