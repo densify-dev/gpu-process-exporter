@@ -58,7 +58,8 @@ test: lint
 	@$(GO) test -race ./...
 
 build-docker-image: test
-	@echo "TODO: Building Docker image..."
+	@echo "Building Docker image..."
+	@./build-docker-image.sh
 
 clean:
 	@echo "Cleaning build output..."

@@ -19,3 +19,4 @@ go.work
 *.jks
 credentials*
 gitleaks-report.*
+trivy-*.json
