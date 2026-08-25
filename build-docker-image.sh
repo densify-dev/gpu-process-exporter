@@ -21,7 +21,7 @@ fi
 DOCKERHUB_TAG="${DOCKERHUB_TAG#v}"
 
 case "${DOCKERHUB_TAG}" in
-    0.2.0-beta2|0.2.0-beta3|1.0.0)
+    0.2.0-beta2|0.2.0-beta3|1.0.0|v0.2.0-beta2|v0.2.0-beta3|v1.0.0)
         echo "Refusing to rebuild historical tag ${DOCKERHUB_TAG}." >&2
         exit 1
         ;;
