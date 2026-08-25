@@ -40,16 +40,23 @@ jobs:
             version="${{ github.event.inputs.version }}"
           fi
           case "${version}" in
+            vv*) echo "Version must not have multiple leading v characters." >&2; exit 1 ;;
             v*) ;;
             *) echo "Version must start with v." >&2; exit 1 ;;
           esac
-          case "${version}" in
-            v0.2.0-beta2|v0.2.0-beta3|v1.0.0|latest)
+          image_tag="${version#v}"
+          case "${image_tag}" in
+            0.2.0-beta2|0.2.0-beta3|1.0.0|latest)
               echo "Refusing to publish historical or mutable tag ${version}." >&2
               exit 1
               ;;
           esac
+          if [[ ! "${image_tag}" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]]; then
+            echo "Invalid Docker image tag: ${image_tag}" >&2
+            exit 1
+          fi
           echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "image_tag=${image_tag}" >> "$GITHUB_OUTPUT"
           echo "created=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -82,30 +89,112 @@ jobs:
         uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8
       - name: Set up Buildx
         uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e
-      - name: Build scan image
+      - name: Build amd64 scan image
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
         with:
           context: .
           load: true
           push: false
           platforms: linux/amd64
-          tags: gpu-process-exporter:scan
+          tags: gpu-process-exporter:scan-amd64
           build-args: |
             TARGETARCH=amd64
             VERSION=${{ steps.version.outputs.version }}
             REVISION=${{ github.sha }}
             CREATED=${{ steps.version.outputs.created }}
             SOURCE_URL=https://github.com/densify-dev/gpu-process-exporter
-      - name: Scan image vulnerabilities
+      - name: Build arm64 scan image
+        if: ${{ !cancelled() }}
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
+        with:
+          context: .
+          load: true
+          push: false
+          platforms: linux/arm64
+          tags: gpu-process-exporter:scan-arm64
+          build-args: |
+            TARGETARCH=arm64
+            VERSION=${{ steps.version.outputs.version }}
+            REVISION=${{ github.sha }}
+            CREATED=${{ steps.version.outputs.created }}
+            SOURCE_URL=https://github.com/densify-dev/gpu-process-exporter
+      - name: Scan amd64 image vulnerabilities
+        if: always()
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           version: v0.74.0
-          image-ref: gpu-process-exporter:scan
+          image-ref: gpu-process-exporter:scan-amd64
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: '1'
           format: json
-          output: trivy-image.json
+          output: trivy-image-amd64.json
+        env:
+          TRIVY_IMAGE_SRC: docker
+      - name: Scan arm64 image vulnerabilities
+        if: always()
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.74.0
+          image-ref: gpu-process-exporter:scan-arm64
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+          format: json
+          output: trivy-image-arm64.json
+        env:
+          TRIVY_IMAGE_SRC: docker
+      - name: Generate amd64 SBOM
+        if: always()
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        with:
+          image: gpu-process-exporter:scan-amd64
+          format: cyclonedx-json
+          output-file: sbom-image-amd64.cyclonedx.json
+          artifact-name: sbom-image-amd64.cyclonedx.json
+          syft-version: v1.51.0
+          upload-artifact: true
+          upload-release-assets: false
+      - name: Generate arm64 SBOM
+        if: always()
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        with:
+          image: gpu-process-exporter:scan-arm64
+          format: cyclonedx-json
+          output-file: sbom-image-arm64.cyclonedx.json
+          artifact-name: sbom-image-arm64.cyclonedx.json
+          syft-version: v1.51.0
+          upload-artifact: true
+          upload-release-assets: false
+      - name: Log in to Docker Hub
+        if: always()
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Scan amd64 image with Docker Scout
+        if: always()
+        uses: docker/scout-action@7c6b6c3f7844478ace1ffd4e7aef649053d1f87d # v1.24.0
+        with:
+          command: cves
+          image: local://gpu-process-exporter:scan-amd64
+          platform: linux/amd64
+          only-severities: high,critical
+          only-fixed: true
+          exit-code: true
+          sarif-file: docker-scout-image-amd64.sarif
+      - name: Scan arm64 image with Docker Scout
+        if: always()
+        uses: docker/scout-action@7c6b6c3f7844478ace1ffd4e7aef649053d1f87d # v1.24.0
+        with:
+          command: cves
+          image: local://gpu-process-exporter:scan-arm64
+          platform: linux/arm64
+          only-severities: high,critical
+          only-fixed: true
+          exit-code: true
+          sarif-file: docker-scout-image-arm64.sarif
       - name: Upload private scan reports
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -113,14 +202,11 @@ jobs:
           name: private-scan-reports
           path: |
             gitleaks-report.json
-            trivy-image.json
+            trivy-image-amd64.json
+            trivy-image-arm64.json
+            docker-scout-image-amd64.sarif
+            docker-scout-image-arm64.sarif
           if-no-files-found: ignore
-      - name: Log in to Docker Hub
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f
-        with:
-          registry: docker.io
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Publish image
         id: build
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
@@ -130,7 +216,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           provenance: mode=max
           sbom: true
-          tags: ${{ env.IMAGE }}:${{ steps.version.outputs.version }}
+          tags: ${{ env.IMAGE }}:${{ steps.version.outputs.image_tag }}
           build-args: |
             VERSION=${{ steps.version.outputs.version }}
             REVISION=${{ github.sha }}

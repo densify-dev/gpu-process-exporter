@@ -14,9 +14,14 @@ SOURCE_URL="${SOURCE_URL:-https://github.com/densify-dev/gpu-process-exporter}"
 CREATED="${CREATED:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}"
 REVISION="${REVISION:-$(git rev-parse HEAD 2>/dev/null || echo unknown)}"
 VERSION="${VERSION:-${DOCKERHUB_TAG:-dev}}"
+if [ "${DOCKERHUB_TAG}" = "v" ]; then
+    echo "Refusing empty Docker Hub tag after removing v prefix." >&2
+    exit 1
+fi
+DOCKERHUB_TAG="${DOCKERHUB_TAG#v}"
 
 case "${DOCKERHUB_TAG}" in
-    v0.2.0-beta2|v0.2.0-beta3|v1.0.0)
+    0.2.0-beta2|0.2.0-beta3|1.0.0|v0.2.0-beta2|v0.2.0-beta3|v1.0.0)
         echo "Refusing to rebuild historical tag ${DOCKERHUB_TAG}." >&2
         exit 1
         ;;
