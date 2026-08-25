@@ -40,6 +40,7 @@ jobs:
             version="${{ github.event.inputs.version }}"
           fi
           case "${version}" in
+            vv*) echo "Version must not have multiple leading v characters." >&2; exit 1 ;;
             v*) ;;
             *) echo "Version must start with v." >&2; exit 1 ;;
           esac
