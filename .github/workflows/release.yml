@@ -166,6 +166,7 @@ jobs:
           upload-artifact: true
           upload-release-assets: false
       - name: Log in to Docker Hub
+        if: always()
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f
         with:
           registry: docker.io
