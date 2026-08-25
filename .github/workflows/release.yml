@@ -26,6 +26,7 @@ env:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    environment: dockerhub
     if: github.event_name == 'push' || github.event.inputs.approved == 'APPROVED'
     steps:
       - name: Resolve version
