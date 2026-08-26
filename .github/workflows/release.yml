@@ -25,6 +25,8 @@ env:
 
 jobs:
   publish:
+    outputs:
+      stable: ${{ steps.version.outputs.stable }}
     runs-on: ubuntu-latest
     environment: dockerhub
     if: github.event_name == 'push' || github.event.inputs.approved == 'APPROVED'
@@ -55,8 +57,14 @@ jobs:
             echo "Invalid Docker image tag: ${image_tag}" >&2
             exit 1
           fi
+          if [[ "${version}" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            stable=true
+          else
+            stable=false
+          fi
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           echo "image_tag=${image_tag}" >> "$GITHUB_OUTPUT"
+          echo "stable=${stable}" >> "$GITHUB_OUTPUT"
           echo "created=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -224,3 +232,22 @@ jobs:
             SOURCE_URL=https://github.com/densify-dev/gpu-process-exporter
       - name: Report digest
         run: echo "${{ env.IMAGE }}@${{ steps.build.outputs.digest }}"
+
+  github-release:
+    needs: publish
+    if: github.event_name == 'push' && github.ref_type == 'tag' && needs.publish.outputs.stable == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            echo "Release ${TAG} already exists; leaving it unchanged."
+          else
+            gh release create "${TAG}" --verify-tag --generate-notes
+          fi
