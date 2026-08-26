@@ -62,7 +62,7 @@ Exported metrics:
 | `kubex_gpu_container_memory_total_bytes` | gauge | Total memory for the GPU. |
 | `kubex_gpu_container_memory_footprint_percent` | gauge | Container memory use as a percent of GPU memory. |
 | `kubex_gpu_container_sm_utilization_percent_seconds_total` | counter | Accumulated SM utilization. |
-| `kubex_gpu_container_memory_utilization_percent_seconds_total` | counter | Accumulated memory utilization. |
+| `kubex_gpu_container_memory_utilization_percent_seconds_total` | counter | Accumulated memory r/w activity utilization. |
 | `kubex_gpu_container_enc_utilization_percent_seconds_total` | counter | Accumulated encoder utilization. |
 | `kubex_gpu_container_dec_utilization_percent_seconds_total` | counter | Accumulated decoder utilization. |
 | `kubex_gpu_container_ofa_utilization_percent_seconds_total` | counter | Accumulated OFA utilization. |
