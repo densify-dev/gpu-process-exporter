@@ -701,17 +701,11 @@
         {
           "expr": "sum by (node, namespace, pod, container) (kubex_gpu_container_requests{node=~\"$node\", namespace=~\"$namespace\", pod=~\"$pod\", container=~\"$container\"})",
           "format": "time_series",
-          "legendFormat": "Requests: {{namespace}}/{{pod}}/{{container}}",
+          "legendFormat": "{{namespace}}/{{pod}}/{{container}}",
           "refId": "A"
-        },
-        {
-          "expr": "sum by (node, namespace, pod, container) (kubex_gpu_container_limits{node=~\"$node\", namespace=~\"$namespace\", pod=~\"$pod\", container=~\"$container\"})",
-          "format": "time_series",
-          "legendFormat": "Limits: {{namespace}}/{{pod}}/{{container}}",
-          "refId": "B"
         }
       ],
-      "title": "GPU requests versus limits",
+      "title": "GPU requests by workload",
       "type": "timeseries"
     },
     {
