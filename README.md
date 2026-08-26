@@ -75,6 +75,19 @@ Exported metrics:
 | `kubex_gpu_container_accounting_start_time_us` | gauge | Accounting start time in microseconds since epoch. |
 | `kubex_gpu_container_accounting_is_running` | gauge | `1` if the process is still running, `0` otherwise. |
 
+## Grafana dashboard
+
+Import [`grafana/gpu-process-exporter-dashboard.json`](grafana/gpu-process-exporter-dashboard.json) into Grafana 10 or newer:
+
+1. Open **Dashboards** and select **New > Import**.
+2. Upload the JSON file, or paste its contents.
+3. Select the Prometheus datasource used to scrape GPU Process Exporter when Grafana asks for `Prometheus`.
+4. Select **Import**.
+
+The dashboard starts with the last hour of data and refreshes every minute. Its workload filters are populated from `kubex_gpu_container_memory_total_bytes` and support node, namespace, pod, container, and GPU UUID selections.
+
+The utilization panels use Grafana's `$__rate_interval`. Set the Prometheus datasource's configured scrape interval to the real scrape interval for the exporter. A mismatch can make rate queries return gaps or no data. The exporter defaults to a 60-second scrape interval through `SCRAPE_INTERVAL`.
+
 ## Build and test
 
 ```bash
