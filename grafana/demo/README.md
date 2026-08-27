@@ -1,6 +1,6 @@
 # Local Grafana demo
 
-This stack shows the GPU Process Exporter dashboard with synthetic metrics for three workloads on two GPUs. It needs Docker Compose v2, but no NVIDIA hardware or Kubernetes cluster.
+This stack shows the GPU Process Exporter dashboard with synthetic metrics for three workloads on two GPUs, including fractional GPU requests. It needs Docker Compose v2, but no NVIDIA hardware or Kubernetes cluster.
 
 ## Start the demo
 

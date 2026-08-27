@@ -24,8 +24,8 @@ WORKLOADS = (
         "pod": "image-inference-7b6c8f",
         "container": "inference",
         "container_id": "containerd://demo-inference",
-        "gpu_allocation_type": "exclusive",
-        "requests": 1,
+        "gpu_allocation_type": "KaiScheduler",
+        "requests": 0.5,
         "devices": (
             {**GPU_1, "memory_base_gib": 7.0, "memory_swing_gib": 1.2, "phase": 0.2, "sm": (45, 13), "memory_util": (38, 12)},
         ),
@@ -36,8 +36,8 @@ WORKLOADS = (
         "pod": "training-worker-5bd78f",
         "container": "trainer",
         "container_id": "containerd://demo-trainer",
-        "gpu_allocation_type": "exclusive",
-        "requests": 2,
+        "gpu_allocation_type": "K8sResource",
+        "requests": 2.0,
         "devices": (
             {**GPU_1, "memory_base_gib": 5.0, "memory_swing_gib": 0.9, "phase": 1.7, "sm": (30, 10), "memory_util": (31, 10)},
             {**GPU_2, "memory_base_gib": 8.5, "memory_swing_gib": 1.3, "phase": 2.4, "sm": (50, 13), "memory_util": (52, 13)},
@@ -49,8 +49,8 @@ WORKLOADS = (
         "pod": "embedding-batch-2c4d1a",
         "container": "worker",
         "container_id": "containerd://demo-embedding",
-        "gpu_allocation_type": "shared",
-        "requests": 1,
+        "gpu_allocation_type": "KaiScheduler",
+        "requests": 0.25,
         "devices": (
             {**GPU_2, "memory_base_gib": 6.5, "memory_swing_gib": 1.1, "phase": 3.1, "sm": (24, 9), "memory_util": (24, 9)},
         ),
