@@ -88,32 +88,6 @@ The dashboard starts with the last hour of data and refreshes every minute. Its 
 
 The utilization panels use Grafana's `$__rate_interval`. Configure Prometheus separately with the scrape interval used for the exporter, then set `SCRAPE_INTERVAL` to that same value. A mismatch can make rate queries return gaps or no data. `SCRAPE_INTERVAL` only sets the exporter's expected matching interval and defaults to 60 seconds.
 
-## Local Grafana demo
-
-The demo uses synthetic metrics for three workloads on two GPUs. It needs Docker Compose v2, but no NVIDIA hardware or Kubernetes cluster.
-
-Run these commands from the repository root:
-
-```bash
-docker compose -f grafana/demo/compose.yaml up -d
-
-curl -fsS http://localhost:9090/-/ready
-```
-
-Wait about two minutes for Prometheus to collect enough samples for the rate panels. Then open the provisioned dashboard:
-
-```text
-http://localhost:3000/d/kubex-gpu-process/kubex-gpu-process-exporter?from=now-2m&to=now&refresh=5s&var-DS_PROMETHEUS=prometheus
-```
-
-Leave Node, Namespace, Pod, Container, and GPU UUID set to `All`. Grafana permits anonymous admin access in this local-only demo. The services listen on ports `3000`, `9090`, and `9494` on localhost.
-
-To regenerate the checked-in screenshot, use a 1600 by 1400 browser viewport, select kiosk mode, and capture the full dashboard page as `grafana/gpu-process-exporter-dashboard.png`. Stop the disposable services when finished:
-
-```bash
-docker compose -f grafana/demo/compose.yaml down -v
-```
-
 ## Build and test
 
 ```bash
