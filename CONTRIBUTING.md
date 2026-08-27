@@ -46,3 +46,13 @@ git push --force-with-lease
 ```
 
 Use `git commit --signoff` for a new commit. Use `git commit --amend --signoff` to repair the latest commit. After adding sign-offs with `git rebase --signoff origin/main`, update the remote branch with `git push --force-with-lease`.
+
+### Git hook to ensure commit signoff
+
+To avoid committing (locally) without signoff (and the need to repair previous commits), you can use the provided [git commit hook](scripts/githooks/commit-msg) (requires `bash`). To install the git commit hook, run (only once) from the repository root (requires `bash`):
+
+```bash
+./install-hook.sh
+```
+
+This git commit hook will prevent you from making any commit without the signoff flag.
