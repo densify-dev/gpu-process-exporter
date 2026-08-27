@@ -55,4 +55,4 @@ To avoid committing locally without a sign-off (and needing to repair previous c
 ./install-hook.sh
 ```
 
-This `commit-msg` hook prevents commits whose messages do not contain a line beginning with `Signed-off-by:`.
+This `commit-msg` hook rejects commits whose messages do not contain a line beginning with `Signed-off-by:`.
