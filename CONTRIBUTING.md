@@ -49,7 +49,7 @@ Use `git commit --signoff` for a new commit. Use `git commit --amend --signoff` 
 
 ### Git hook to ensure commit signoff
 
-To avoid committing (locally) without signoff (and the need to repair previous commits), you can use the provided [git commit hook](scripts/githooks/commit-msg) (requires `bash`). To install the git commit hook, run (only once) from the repository root (requires `bash`):
+To avoid committing locally without a sign-off (and needing to repair previous commits), you can use the provided [Git `commit-msg` hook](scripts/githooks/commit-msg) (requires `bash`). To install it, run the following command from the repository root. **Warning:** the installer overwrites any existing `.git/hooks/commit-msg` file, so preserve or integrate an existing hook before running it:
 
 ```bash
 ./install-hook.sh
