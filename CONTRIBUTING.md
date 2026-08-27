@@ -55,4 +55,4 @@ To avoid committing (locally) without signoff (and the need to repair previous c
 ./install-hook.sh
 ```
 
-This git commit hook will prevent you from making any commit without the signoff flag.
+This `commit-msg` hook prevents commits whose messages do not contain a line beginning with `Signed-off-by:`.
