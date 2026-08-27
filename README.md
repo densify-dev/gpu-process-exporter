@@ -29,7 +29,7 @@ Helm is the easiest way to use this exporter. [Get the chart here](https://githu
 | `NODE_NAME` | none | yes | Kubernetes node name to use in metric labels and pod lookups. |
 | `HOST_PROC_MOUNT_POINT` | `/host/proc` | no | Host `/proc` mount inside the exporter container. |
 | `DRIVER_POLL_INTERVAL` | `1s` | no | How often the exporter polls NVML. |
-| `SCRAPE_INTERVAL` | `60s` | no | Prometheus scrape interval. It must be a multiple of `DRIVER_POLL_INTERVAL`. |
+| `SCRAPE_INTERVAL` | `60s` | no | Exporter's expected matching interval for Prometheus scrapes. It does not configure Prometheus and must be a multiple of `DRIVER_POLL_INTERVAL`. |
 | `EXPORTER_ENDPOINT` | `/metrics` | no | HTTP path for Prometheus metrics. |
 | `EXPORTER_PORT` | `9494` | no | Metrics port. Must be between 1024 and 65535. |
 | `NVML_SEARCH_PATH` | auto-detect | no | Host path containing `libnvidia-ml.so` if auto-detection does not find it. |
@@ -74,6 +74,19 @@ Exported metrics:
 | `kubex_gpu_container_accounting_time_us` | gauge | Accounting runtime in microseconds. |
 | `kubex_gpu_container_accounting_start_time_us` | gauge | Accounting start time in microseconds since epoch. |
 | `kubex_gpu_container_accounting_is_running` | gauge | `1` if the process is still running, `0` otherwise. |
+
+## Grafana dashboard
+
+Import [`grafana/gpu-process-exporter-dashboard.json`](grafana/gpu-process-exporter-dashboard.json) into Grafana 10 or newer:
+
+1. Open **Dashboards** and select **New > Import**.
+2. Upload the JSON file, or paste its contents.
+3. Select the Prometheus datasource used to scrape GPU Process Exporter when Grafana asks for `Prometheus`.
+4. Select **Import**.
+
+The dashboard starts with the last hour of data and refreshes every minute. Its workload filters are populated from `kubex_gpu_container_memory_total_bytes` and support node, namespace, pod, container, and GPU UUID selections.
+
+The utilization panels use Grafana's `$__rate_interval`. Configure Prometheus separately with the scrape interval used for the exporter, then set `SCRAPE_INTERVAL` to that same value. A mismatch can make rate queries return gaps or no data. `SCRAPE_INTERVAL` only sets the exporter's expected matching interval and defaults to 60 seconds.
 
 ## Build and test
 
