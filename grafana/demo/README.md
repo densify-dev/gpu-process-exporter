@@ -9,7 +9,9 @@ Run these commands from the repository root:
 ```bash
 docker compose -f grafana/demo/compose.yaml up -d
 
-curl -fsS http://localhost:9090/-/ready
+until curl -fsS http://localhost:9090/-/ready >/dev/null; do
+  sleep 1
+done
 ```
 
 Wait about two minutes for Prometheus to collect enough samples for the rate panels. The stack exposes these local-only services:
