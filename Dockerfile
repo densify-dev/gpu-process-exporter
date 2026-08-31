@@ -8,15 +8,17 @@ FROM --platform=${BUILDPLATFORM} ${BUILDIMAGE} AS build
 ARG BUILDARCH
 ARG TARGETARCH
 
-RUN apt-get update \
-    && apt-get upgrade -y \
-    && apt-get install -y --no-install-recommends \
+RUN export DEBIAN_FRONTEND=noninteractive; \
+    echo "Installing packages: gcc g++ gcc-aarch64-linux-gnu gcc-x86-64-linux-gnu libc6-dev-arm64-cross libc6-dev-amd64-cross" \
+    && apt-get update -qq >/dev/null \
+    && apt-get upgrade -qq -y -o=Dpkg::Use-Pty=0 >/dev/null \
+    && apt-get install -qq -y -o=Dpkg::Use-Pty=0 --no-install-recommends \
         gcc \
         g++ \
         gcc-aarch64-linux-gnu \
         gcc-x86-64-linux-gnu \
         libc6-dev-arm64-cross \
-        libc6-dev-amd64-cross \
+        libc6-dev-amd64-cross >/dev/null \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src/gpu-process-exporter
@@ -78,9 +80,11 @@ LABEL org.opencontainers.image.title="GPU Process Exporter" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.created="${CREATED}"
 
-RUN apt-get update \
-    && apt-get upgrade -y \
-    && apt-get install -y --no-install-recommends ca-certificates \
+RUN export DEBIAN_FRONTEND=noninteractive; \
+    echo "Installing packages: ca-certificates" \
+    && apt-get update -qq >/dev/null \
+    && apt-get upgrade -qq -y -o=Dpkg::Use-Pty=0 >/dev/null \
+    && apt-get install -qq -y -o=Dpkg::Use-Pty=0 --no-install-recommends ca-certificates >/dev/null \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --chmod=755 --from=build /out/${TARGETARCH}/gpu-exporter /usr/local/bin/gpu-exporter
