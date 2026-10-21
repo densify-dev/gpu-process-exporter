@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 ARG TARGETIMAGE=debian:trixie-slim
-ARG BUILDIMAGE=golang:1.27.0-trixie
+ARG BUILDIMAGE=golang:1.27-trixie
 
 FROM --platform=${BUILDPLATFORM} ${BUILDIMAGE} AS build
 
