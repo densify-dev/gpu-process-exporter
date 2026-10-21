@@ -45,7 +45,7 @@ func run() error {
 
 	if err = <-errCh; err != nil {
 		stop()
-		<-errCh
+		<-errCh //nolint:errcheck // Wait for shutdown; return the first error.
 		return err
 	}
 	return <-errCh

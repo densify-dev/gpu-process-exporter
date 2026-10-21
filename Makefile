@@ -2,7 +2,7 @@
 
 SHELL := /bin/bash
 
-LINTER_VERSION ?= v2.13.1
+LINTER_VERSION ?= v2.15.0
 GO ?= go
 GOPATH ?= $(shell $(GO) env GOPATH)
 GOLANGCI_LINT ?= $(GOPATH)/bin/golangci-lint
