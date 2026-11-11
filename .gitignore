@@ -3,8 +3,10 @@
 *.swp
 *.swo
 *~
+__pycache__/
 
 bin
+prompt
 *.out
 go.work
 .env

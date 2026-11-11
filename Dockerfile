@@ -24,6 +24,9 @@ RUN export DEBIAN_FRONTEND=noninteractive; \
 WORKDIR /src/gpu-process-exporter
 COPY . .
 
+ARG VERSION=dev
+ARG REVISION=unknown
+
 RUN set -eux; \
     buildarch="${BUILDARCH:-$(dpkg --print-architecture)}"; \
     case "${buildarch}" in \
@@ -54,7 +57,7 @@ RUN set -eux; \
     go build -trimpath \
         -gcflags=-trimpath="${TRIMPATH}" \
         -asmflags=-trimpath="${TRIMPATH}" \
-        -ldflags="-w -s" \
+        -ldflags="-w -s -X github.com/densify-dev/gpu-process-exporter/pkg/prometheus.version=${VERSION} -X github.com/densify-dev/gpu-process-exporter/pkg/prometheus.revision=${REVISION}" \
         -o "/out/${TARGETARCH}/gpu-exporter" \
         cmd/main.go; \
     go run github.com/google/go-licenses/v2@v2.0.1 save \

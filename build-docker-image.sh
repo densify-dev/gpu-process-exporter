@@ -3,7 +3,7 @@
 set -euo pipefail
 
 TARGET_IMAGE="${TARGET_IMAGE:-debian:trixie-slim}"
-BUILD_IMAGE="${BUILD_IMAGE:-golang:1.27.0-trixie}"
+BUILD_IMAGE="${BUILD_IMAGE:-golang:1.27-trixie}"
 DOCKERHUB_REPO="${DOCKERHUB_REPO:-densify/gpu-process-exporter}"
 DOCKERHUB_TAG="${DOCKERHUB_TAG:-}"
 PUSH_IMAGE="${PUSH_IMAGE:-false}"

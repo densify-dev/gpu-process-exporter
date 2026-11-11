@@ -69,14 +69,21 @@ jobs:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ steps.version.outputs.version }}
           fetch-depth: 0
+      - name: Resolve source revision
+        id: source
+        run: echo "revision=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           cache: true
       - name: Check shell syntax
-        run: bash -n build.sh build-docker-image.sh entrypoint.sh
+        run: |
+          for script in build.sh build-docker-image.sh entrypoint.sh .github/scripts/update-helm-chart-tag.sh; do
+            bash -n "$script"
+          done
       - name: Check formatting
         run: test -z "$(gofmt -l cmd pkg)"
       - name: Test
@@ -108,7 +115,7 @@ jobs:
           build-args: |
             TARGETARCH=amd64
             VERSION=${{ steps.version.outputs.version }}
-            REVISION=${{ github.sha }}
+            REVISION=${{ steps.source.outputs.revision }}
             CREATED=${{ steps.version.outputs.created }}
             SOURCE_URL=https://github.com/densify-dev/gpu-process-exporter
       - name: Build arm64 scan image
@@ -123,7 +130,7 @@ jobs:
           build-args: |
             TARGETARCH=arm64
             VERSION=${{ steps.version.outputs.version }}
-            REVISION=${{ github.sha }}
+            REVISION=${{ steps.source.outputs.revision }}
             CREATED=${{ steps.version.outputs.created }}
             SOURCE_URL=https://github.com/densify-dev/gpu-process-exporter
       - name: Scan amd64 image vulnerabilities
@@ -176,14 +183,14 @@ jobs:
           upload-release-assets: false
       - name: Log in to Docker Hub
         if: always()
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           registry: docker.io
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
       - name: Scan amd64 image with Docker Scout
         if: ${{ !cancelled() && steps.build-amd64.outcome == 'success' }}
-        uses: docker/scout-action@a4119c5a8c5076236a54e4ce99531f7e4dd2ef84 # v1.27.0
+        uses: docker/scout-action@e7e2a72bf1485d10a58f30696b6c513b261ce4fa # v1.29.0
         with:
           command: cves
           image: local://gpu-process-exporter:scan-amd64
@@ -194,7 +201,7 @@ jobs:
           sarif-file: docker-scout-image-amd64.sarif
       - name: Scan arm64 image with Docker Scout
         if: ${{ !cancelled() && steps.build-arm64.outcome == 'success' }}
-        uses: docker/scout-action@a4119c5a8c5076236a54e4ce99531f7e4dd2ef84 # v1.27.0
+        uses: docker/scout-action@e7e2a72bf1485d10a58f30696b6c513b261ce4fa # v1.29.0
         with:
           command: cves
           image: local://gpu-process-exporter:scan-arm64
@@ -227,11 +234,34 @@ jobs:
           tags: ${{ env.IMAGE }}:${{ steps.version.outputs.image_tag }}
           build-args: |
             VERSION=${{ steps.version.outputs.version }}
-            REVISION=${{ github.sha }}
+            REVISION=${{ steps.source.outputs.revision }}
             CREATED=${{ steps.version.outputs.created }}
             SOURCE_URL=https://github.com/densify-dev/gpu-process-exporter
       - name: Report digest
         run: echo "${{ env.IMAGE }}@${{ steps.build.outputs.digest }}"
+      - name: Generate helm-charts app token
+        id: app_token
+        if: >-
+          !cancelled() &&
+          steps.version.outputs.stable == 'true' &&
+          steps.build.outcome == 'success'
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          app-id: ${{ secrets.KUBEXAUTOMATION_APP_ID }}
+          private-key: ${{ secrets.KUBEXAUTOMATION_APP_PRIVATE_KEY }}
+          owner: densify-dev
+          repositories: helm-charts
+          permission-contents: write
+          permission-pull-requests: write
+      - name: Open helm-charts PR to update the GPU process exporter image tag
+        if: ${{ !cancelled() && steps.app_token.outcome == 'success' }}
+        env:
+          GH_TOKEN: ${{ steps.app_token.outputs.token }}
+          APP_SLUG: ${{ steps.app_token.outputs.app-slug }}
+          TAG: ${{ steps.version.outputs.image_tag }}
+          CHARTS_REPO: densify-dev/helm-charts
+          CHART_DIR: charts/gpu-process-exporter
+        run: bash .github/scripts/update-helm-chart-tag.sh
 
   github-release:
     needs: publish

@@ -6,6 +6,9 @@ LINTER_VERSION ?= v2.15.0
 GO ?= go
 GOPATH ?= $(shell $(GO) env GOPATH)
 GOLANGCI_LINT ?= $(GOPATH)/bin/golangci-lint
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+REVISION ?= $(shell git rev-parse HEAD 2>/dev/null || echo unknown)
+BUILD_INFO_FLAGS = -X github.com/densify-dev/gpu-process-exporter/pkg/prometheus.version=$(VERSION) -X github.com/densify-dev/gpu-process-exporter/pkg/prometheus.revision=$(REVISION)
 
 .PHONY: all tools lint build build-binary build-multiarch test build-docker-image clean help
 
@@ -29,7 +32,7 @@ lint: tools
 
 build: clean lint
 	@echo "Building packages..."
-	@$(GO) build ./...
+	@$(GO) build -ldflags="$(BUILD_INFO_FLAGS)" ./...
 
 build-binary: clean
 	@case "$$(uname -m)" in \
@@ -45,12 +48,12 @@ build-binary: clean
 	CGO_CFLAGS="-Wno-deprecated-declarations" \
 	CC=gcc \
 	$(GO) build -trimpath \
-	-ldflags="-w -s" \
+	-ldflags="-w -s $(BUILD_INFO_FLAGS)" \
 	-o bin/$$TARGETARCH/gpu-exporter cmd/main.go
 
 build-multiarch: clean lint
 	@echo "Building multi-arch binaries..."
-	@./build.sh
+	@VERSION="$(VERSION)" REVISION="$(REVISION)" ./build.sh
 
 test: lint
 	@echo "Running tests..."
