@@ -122,6 +122,23 @@ else:
         pr = json.loads((self.root / "pr.json").read_text())
         self.assertEqual(pr["args"][:3], ["pr", "edit", "42"])
 
+    def test_rerun_after_merged_pr_is_noop(self):
+        self.run_update()
+        self.git("merge", "--quiet", "--ff-only", "update/gpu-process-exporter-1.2.3")
+        merged_sha = self.git("rev-parse", "master")
+        (self.root / "pr.json").unlink()
+
+        chart = self.run_update()
+
+        self.assertIn("version: 1.1.10\n", (chart / "Chart.yaml").read_text())
+        self.assertEqual(self.git("rev-parse", "master"), merged_sha)
+        self.assertEqual(self.git("rev-parse", "update/gpu-process-exporter-1.2.3"), merged_sha)
+        self.assertEqual(
+            subprocess.check_output(["git", "-C", str(chart), "status", "--porcelain"], text=True),
+            "",
+        )
+        self.assertFalse((self.root / "pr.json").exists())
+
     def test_rejects_unstable_tag(self):
         self.env["TAG"] = "1.2.3-beta2"
         self.run_update(succeeds=False)

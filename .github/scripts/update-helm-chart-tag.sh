@@ -35,6 +35,18 @@ git clone --quiet --depth 1 --branch "${branch}" \
   "https://x-access-token:${GH_TOKEN}@github.com/${CHARTS_REPO}.git" "${work_dir}"
 cd "${work_dir}/${CHART_DIR}"
 
+sed -i -E "/^image:/,/^[^ ]/ s/^(  tag:).*/\1 \"${TAG}\"/" values.yaml
+grep -Fxq "  tag: \"${TAG}\"" values.yaml
+
+# Replace the final table cell, whether it is empty or already contains a tag.
+sed -i -E "/^\| \`image\.tag\`[[:space:]]*\|/ s/\|[^|]*\|[[:space:]]*$/| \`${TAG}\` |/" README.md
+grep -Eq "^\| \`image\.tag\`[[:space:]]*\|.*\| \`${TAG}\` \|$" README.md
+
+if git diff --quiet -- values.yaml README.md; then
+  echo "gpu-process-exporter image tag and README default already match ${TAG}; no update needed."
+  exit 0
+fi
+
 current_version="$(sed -n -E 's/^version: *//p' Chart.yaml)"
 if [[ ! "${current_version}" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
   echo "::error::unexpected chart version format: ${current_version}"
@@ -43,13 +55,6 @@ fi
 next_version="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.$((10#${BASH_REMATCH[3]} + 1))"
 sed -i -E "s/^version: .*/version: ${next_version}/" Chart.yaml
 grep -Fxq "version: ${next_version}" Chart.yaml
-
-sed -i -E "/^image:/,/^[^ ]/ s/^(  tag:).*/\1 \"${TAG}\"/" values.yaml
-grep -Fxq "  tag: \"${TAG}\"" values.yaml
-
-# Replace the final table cell, whether it is empty or already contains a tag.
-sed -i -E "/^\| \`image\.tag\`[[:space:]]*\|/ s/\|[^|]*\|[[:space:]]*$/| \`${TAG}\` |/" README.md
-grep -Eq "^\| \`image\.tag\`[[:space:]]*\|.*\| \`${TAG}\` \|$" README.md
 
 changed="$(git diff --name-only | sort | tr '\n' ' ')"
 expected="${CHART_DIR}/Chart.yaml ${CHART_DIR}/README.md ${CHART_DIR}/values.yaml "
