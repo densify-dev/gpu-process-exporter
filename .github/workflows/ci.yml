@@ -47,7 +47,11 @@ jobs:
       - name: Secret scan
         run: $(go env GOPATH)/bin/gitleaks git --redact --verbose --report-format=json --report-path=gitleaks-report.json .
       - name: Build image without pushing
-        run: docker build --build-arg TARGETARCH=amd64 -t gpu-process-exporter:ci .
+        run: |
+          docker build --build-arg TARGETARCH=amd64 \
+            --build-arg VERSION=dev \
+            --build-arg "REVISION=$(git rev-parse HEAD)" \
+            -t gpu-process-exporter:ci .
       - name: Scan image vulnerabilities
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:

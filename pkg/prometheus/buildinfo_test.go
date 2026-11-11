@@ -3,9 +3,7 @@
 package prometheus
 
 import (
-	"os/exec"
 	"runtime"
-	"strings"
 	"testing"
 )
 
@@ -18,22 +16,21 @@ func TestBuildInfoLabels(t *testing.T) {
 		GoArchLabelName:    runtime.GOARCH,
 		GoOsLabelName:      runtime.GOOS,
 		GoVersionLabelName: runtime.Version(),
+		RevisionLabelName:  revision,
+		VersionLabelName:   version,
 	} {
 		if got := labels[name]; got != want {
 			t.Errorf("%s = %q, want %q", name, got, want)
 		}
 	}
-	for name, args := range map[string][]string{
-		RevisionLabelName: {"rev-parse", "HEAD"},
-		VersionLabelName:  {"tag", "--sort=-creatordate"},
-	} {
-		output, err := exec.Command("git", args...).Output()
-		if err != nil {
-			t.Fatalf("git %v: %v", args, err)
-		}
-		want := strings.TrimSpace(strings.SplitN(string(output), "\n", 2)[0])
-		if got := labels[name]; got != want {
-			t.Errorf("%s = %q, want %q; run go generate ./pkg/prometheus", name, got, want)
-		}
+}
+
+func TestBuildInfoLabelsWithBuildMetadata(t *testing.T) {
+	originalVersion, originalRevision := version, revision
+	t.Cleanup(func() { version, revision = originalVersion, originalRevision })
+	version, revision = "v1.2.3", "0123456789abcdef0123456789abcdef01234567"
+	labels := BuildInfoLabels()
+	if labels[VersionLabelName] != version || labels[RevisionLabelName] != revision {
+		t.Fatalf("build labels = %v, want version %q and revision %q", labels, version, revision)
 	}
 }

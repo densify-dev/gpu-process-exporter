@@ -9,11 +9,10 @@ ARG BUILDARCH
 ARG TARGETARCH
 
 RUN export DEBIAN_FRONTEND=noninteractive; \
-    echo "Installing packages: git gcc g++ gcc-aarch64-linux-gnu gcc-x86-64-linux-gnu libc6-dev-arm64-cross libc6-dev-amd64-cross" \
+    echo "Installing packages: gcc g++ gcc-aarch64-linux-gnu gcc-x86-64-linux-gnu libc6-dev-arm64-cross libc6-dev-amd64-cross" \
     && apt-get update -qq >/dev/null \
     && apt-get upgrade -qq -y -o=Dpkg::Use-Pty=0 >/dev/null \
     && apt-get install -qq -y -o=Dpkg::Use-Pty=0 --no-install-recommends \
-        git \
         gcc \
         g++ \
         gcc-aarch64-linux-gnu \
@@ -24,6 +23,9 @@ RUN export DEBIAN_FRONTEND=noninteractive; \
 
 WORKDIR /src/gpu-process-exporter
 COPY . .
+
+ARG VERSION=dev
+ARG REVISION=unknown
 
 RUN set -eux; \
     buildarch="${BUILDARCH:-$(dpkg --print-architecture)}"; \
@@ -47,7 +49,6 @@ RUN set -eux; \
     command -v "${cc}" >/dev/null; \
     mkdir -p "/out/${TARGETARCH}"; \
     TRIMPATH="$(realpath ..)"; \
-    GOOS=linux GOARCH="${TARGETARCH}" go generate ./pkg/prometheus; \
     GOOS=linux \
     GOARCH="${TARGETARCH}" \
     CGO_ENABLED=1 \
@@ -56,7 +57,7 @@ RUN set -eux; \
     go build -trimpath \
         -gcflags=-trimpath="${TRIMPATH}" \
         -asmflags=-trimpath="${TRIMPATH}" \
-        -ldflags="-w -s" \
+        -ldflags="-w -s -X github.com/densify-dev/gpu-process-exporter/pkg/prometheus.version=${VERSION} -X github.com/densify-dev/gpu-process-exporter/pkg/prometheus.revision=${REVISION}" \
         -o "/out/${TARGETARCH}/gpu-exporter" \
         cmd/main.go; \
     go run github.com/google/go-licenses/v2@v2.0.1 save \

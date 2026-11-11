@@ -6,13 +6,13 @@ LINTER_VERSION ?= v2.15.0
 GO ?= go
 GOPATH ?= $(shell $(GO) env GOPATH)
 GOLANGCI_LINT ?= $(GOPATH)/bin/golangci-lint
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+REVISION ?= $(shell git rev-parse HEAD 2>/dev/null || echo unknown)
+BUILD_INFO_FLAGS = -X github.com/densify-dev/gpu-process-exporter/pkg/prometheus.version=$(VERSION) -X github.com/densify-dev/gpu-process-exporter/pkg/prometheus.revision=$(REVISION)
 
-.PHONY: all generate tools lint build build-binary build-multiarch test build-docker-image clean help
+.PHONY: all tools lint build build-binary build-multiarch test build-docker-image clean help
 
 all: test
-
-generate:
-	@$(GO) generate ./pkg/prometheus
 
 tools:
 	@installed_version=""; \
@@ -26,13 +26,13 @@ tools:
 		$(GO) install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(LINTER_VERSION); \
 	fi
 
-lint: generate tools
+lint: tools
 	@echo "Running golangci-lint..."
 	@$(GOLANGCI_LINT) run ./...
 
 build: clean lint
 	@echo "Building packages..."
-	@$(GO) build ./...
+	@$(GO) build -ldflags="$(BUILD_INFO_FLAGS)" ./...
 
 build-binary: clean
 	@case "$$(uname -m)" in \
@@ -42,19 +42,18 @@ build-binary: clean
 	esac; \
 	mkdir -p bin/$$TARGETARCH; \
 	echo "Building linux/$$TARGETARCH executable..."; \
-	GOOS=linux GOARCH=$$TARGETARCH $(GO) generate ./pkg/prometheus && \
 	GOOS=linux \
 	GOARCH=$$TARGETARCH \
 	CGO_ENABLED=1 \
 	CGO_CFLAGS="-Wno-deprecated-declarations" \
 	CC=gcc \
 	$(GO) build -trimpath \
-	-ldflags="-w -s" \
+	-ldflags="-w -s $(BUILD_INFO_FLAGS)" \
 	-o bin/$$TARGETARCH/gpu-exporter cmd/main.go
 
 build-multiarch: clean lint
 	@echo "Building multi-arch binaries..."
-	@./build.sh
+	@VERSION="$(VERSION)" REVISION="$(REVISION)" ./build.sh
 
 test: lint
 	@echo "Running tests..."
@@ -72,7 +71,6 @@ clean:
 help:
 	@echo "Available targets:"
 	@echo "  all                 Run test (default)"
-	@echo "  generate            Generate embedded build information"
 	@echo "  tools               Install golangci-lint $(LINTER_VERSION)"
 	@echo "  lint                Run golangci-lint"
 	@echo "  build               Run go build ./..."

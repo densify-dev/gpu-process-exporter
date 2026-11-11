@@ -4,6 +4,8 @@ set -euo pipefail
 
 rm -rf bin
 TRIMPATH=$(realpath ..)
+VERSION="${VERSION:-$(git describe --tags --always --dirty 2>/dev/null || echo dev)}"
+REVISION="${REVISION:-$(git rev-parse HEAD 2>/dev/null || echo unknown)}"
 
 case "$(uname -m)" in
     x86_64|amd64)
@@ -51,8 +53,6 @@ for TARGETARCH in amd64 arm64; do
 
     echo "Building for ${TARGETARCH} on ${HOSTARCH} using CC=${CC}..."
 
-    GOOS=linux GOARCH=${TARGETARCH} go generate ./pkg/prometheus
-
     GOOS=linux \
     GOARCH=${TARGETARCH} \
     CGO_ENABLED=1 \
@@ -61,6 +61,6 @@ for TARGETARCH in amd64 arm64; do
     go build -trimpath \
     -gcflags=-trimpath="${TRIMPATH}" \
     -asmflags=-trimpath="${TRIMPATH}" \
-    -ldflags="-w -s" \
+    -ldflags="-w -s -X github.com/densify-dev/gpu-process-exporter/pkg/prometheus.version=${VERSION} -X github.com/densify-dev/gpu-process-exporter/pkg/prometheus.revision=${REVISION}" \
     -o bin/${TARGETARCH}/gpu-exporter cmd/main.go
 done

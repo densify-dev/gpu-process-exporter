@@ -9,9 +9,6 @@
 !cmd/**
 !pkg/
 !pkg/**
-!.git/
-!.git/**
-**/gen/
 **/*_test.go
 !entrypoint.sh
 !LICENSE

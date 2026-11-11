@@ -69,7 +69,11 @@ jobs:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ steps.version.outputs.version }}
           fetch-depth: 0
+      - name: Resolve source revision
+        id: source
+        run: echo "revision=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -111,7 +115,7 @@ jobs:
           build-args: |
             TARGETARCH=amd64
             VERSION=${{ steps.version.outputs.version }}
-            REVISION=${{ github.sha }}
+            REVISION=${{ steps.source.outputs.revision }}
             CREATED=${{ steps.version.outputs.created }}
             SOURCE_URL=https://github.com/densify-dev/gpu-process-exporter
       - name: Build arm64 scan image
@@ -126,7 +130,7 @@ jobs:
           build-args: |
             TARGETARCH=arm64
             VERSION=${{ steps.version.outputs.version }}
-            REVISION=${{ github.sha }}
+            REVISION=${{ steps.source.outputs.revision }}
             CREATED=${{ steps.version.outputs.created }}
             SOURCE_URL=https://github.com/densify-dev/gpu-process-exporter
       - name: Scan amd64 image vulnerabilities
@@ -230,7 +234,7 @@ jobs:
           tags: ${{ env.IMAGE }}:${{ steps.version.outputs.image_tag }}
           build-args: |
             VERSION=${{ steps.version.outputs.version }}
-            REVISION=${{ github.sha }}
+            REVISION=${{ steps.source.outputs.revision }}
             CREATED=${{ steps.version.outputs.created }}
             SOURCE_URL=https://github.com/densify-dev/gpu-process-exporter
       - name: Report digest

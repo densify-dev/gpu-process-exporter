@@ -87,10 +87,10 @@ Exported metrics:
 | `goarch` | Target Go architecture, such as `amd64` or `arm64`. |
 | `goos` | Target Go operating system, such as `linux`. |
 | `goversion` | Go toolchain version used for the build. |
-| `revision` | Full Git commit hash of `HEAD` at generation time. |
-| `version` | Newest Git tag by creation date (`git tag --sort=-creatordate`), or empty if no tags exist. This is not necessarily a tag on `HEAD`. |
+| `revision` | Commit hash supplied at build time, or `unknown` for plain Go builds. |
+| `version` | Version supplied at build time, or `dev` for plain Go builds. |
 
-These values are generated and embedded at build time. The metric does not include the standard container or per-device labels.
+The Go labels come from the running binary's runtime information. Version and revision are injected with linker flags. Release images use the same version and revision for the metric and OCI image labels. The metric does not include the standard container or per-device labels.
 
 ## Grafana dashboard
 
@@ -108,7 +108,6 @@ The utilization panels use Grafana's `$__rate_interval`. Configure Prometheus se
 ## Build and test
 
 ```bash
-go generate ./pkg/prometheus
 go test ./...
 go test -race ./...
 go build ./...
@@ -119,6 +118,8 @@ Build local binaries for amd64 and arm64:
 ```bash
 ./build.sh
 ```
+
+Make targets and `build.sh` default to `git describe --tags --always --dirty` for the version and the full `HEAD` commit hash for the revision. Override these with `VERSION` and `REVISION`. No generation step or Git metadata is required for plain Go builds or tests.
 
 Build a container image without pushing:
 
