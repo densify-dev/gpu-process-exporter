@@ -51,6 +51,8 @@ for TARGETARCH in amd64 arm64; do
 
     echo "Building for ${TARGETARCH} on ${HOSTARCH} using CC=${CC}..."
 
+    GOOS=linux GOARCH=${TARGETARCH} go generate ./pkg/prometheus
+
     GOOS=linux \
     GOARCH=${TARGETARCH} \
     CGO_ENABLED=1 \

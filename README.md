@@ -38,7 +38,7 @@ Helm is the easiest way to use this exporter. [Get the chart here](https://githu
 
 ## Metrics
 
-All metrics use Kubernetes container labels. Per-device metrics also include GPU UUID and model.
+Container metrics (`kubex_gpu_container_*`) use Kubernetes container labels. Per-device metrics also include GPU UUID and model. The build information metric uses its own labels, described below.
 
 Container labels:
 
@@ -76,6 +76,21 @@ Exported metrics:
 | `kubex_gpu_container_accounting_time_us` | gauge | Accounting runtime in microseconds. |
 | `kubex_gpu_container_accounting_start_time_us` | gauge | Accounting start time in microseconds since epoch. |
 | `kubex_gpu_container_accounting_is_running` | gauge | `1` if the process is still running, `0` otherwise. |
+| `kubex_gpu_process_exporter_build_info` | gauge | Exporter build information, with a constant value of `1`. Uses only the build labels below, not container or per-device labels. |
+
+### Build information labels
+
+`kubex_gpu_process_exporter_build_info` exposes one series per exporter instance with these labels:
+
+| Label | Description |
+| --- | --- |
+| `goarch` | Target Go architecture, such as `amd64` or `arm64`. |
+| `goos` | Target Go operating system, such as `linux`. |
+| `goversion` | Go toolchain version used for the build. |
+| `revision` | Full Git commit hash of `HEAD` at generation time. |
+| `version` | Newest Git tag by creation date (`git tag --sort=-creatordate`), or empty if no tags exist. This is not necessarily a tag on `HEAD`. |
+
+These values are generated and embedded at build time. The metric does not include the standard container or per-device labels.
 
 ## Grafana dashboard
 
@@ -93,6 +108,7 @@ The utilization panels use Grafana's `$__rate_interval`. Configure Prometheus se
 ## Build and test
 
 ```bash
+go generate ./pkg/prometheus
 go test ./...
 go test -race ./...
 go build ./...
