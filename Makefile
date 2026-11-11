@@ -7,9 +7,12 @@ GO ?= go
 GOPATH ?= $(shell $(GO) env GOPATH)
 GOLANGCI_LINT ?= $(GOPATH)/bin/golangci-lint
 
-.PHONY: all tools lint build build-binary build-multiarch test build-docker-image clean help
+.PHONY: all generate tools lint build build-binary build-multiarch test build-docker-image clean help
 
 all: test
+
+generate:
+	@$(GO) generate ./pkg/prometheus
 
 tools:
 	@installed_version=""; \
@@ -23,7 +26,7 @@ tools:
 		$(GO) install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(LINTER_VERSION); \
 	fi
 
-lint: tools
+lint: generate tools
 	@echo "Running golangci-lint..."
 	@$(GOLANGCI_LINT) run ./...
 
@@ -39,6 +42,7 @@ build-binary: clean
 	esac; \
 	mkdir -p bin/$$TARGETARCH; \
 	echo "Building linux/$$TARGETARCH executable..."; \
+	GOOS=linux GOARCH=$$TARGETARCH $(GO) generate ./pkg/prometheus && \
 	GOOS=linux \
 	GOARCH=$$TARGETARCH \
 	CGO_ENABLED=1 \
@@ -68,6 +72,7 @@ clean:
 help:
 	@echo "Available targets:"
 	@echo "  all                 Run test (default)"
+	@echo "  generate            Generate embedded build information"
 	@echo "  tools               Install golangci-lint $(LINTER_VERSION)"
 	@echo "  lint                Run golangci-lint"
 	@echo "  build               Run go build ./..."
