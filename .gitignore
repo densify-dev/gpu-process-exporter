@@ -3,6 +3,7 @@
 *.swp
 *.swo
 *~
+__pycache__/
 
 gen
 bin

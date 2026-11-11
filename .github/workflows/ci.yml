@@ -24,7 +24,12 @@ jobs:
           go-version-file: go.mod
           cache: true
       - name: Check shell syntax
-        run: bash -n build.sh build-docker-image.sh entrypoint.sh
+        run: |
+          for script in build.sh build-docker-image.sh entrypoint.sh .github/scripts/update-helm-chart-tag.sh; do
+            bash -n "$script"
+          done
+      - name: Test Helm chart release updates
+        run: python3 -B -m unittest discover -s .github/scripts -p 'test_*.py'
       - name: Check formatting
         run: test -z "$(gofmt -l cmd pkg)"
       - name: Lint

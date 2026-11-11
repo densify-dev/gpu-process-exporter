@@ -76,7 +76,10 @@ jobs:
           go-version-file: go.mod
           cache: true
       - name: Check shell syntax
-        run: bash -n build.sh build-docker-image.sh entrypoint.sh
+        run: |
+          for script in build.sh build-docker-image.sh entrypoint.sh .github/scripts/update-helm-chart-tag.sh; do
+            bash -n "$script"
+          done
       - name: Check formatting
         run: test -z "$(gofmt -l cmd pkg)"
       - name: Test
@@ -232,6 +235,29 @@ jobs:
             SOURCE_URL=https://github.com/densify-dev/gpu-process-exporter
       - name: Report digest
         run: echo "${{ env.IMAGE }}@${{ steps.build.outputs.digest }}"
+      - name: Generate helm-charts app token
+        id: app_token
+        if: >-
+          !cancelled() &&
+          steps.version.outputs.stable == 'true' &&
+          steps.build.outcome == 'success'
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          app-id: ${{ secrets.KUBEXAUTOMATION_APP_ID }}
+          private-key: ${{ secrets.KUBEXAUTOMATION_APP_PRIVATE_KEY }}
+          owner: densify-dev
+          repositories: helm-charts
+          permission-contents: write
+          permission-pull-requests: write
+      - name: Open helm-charts PR to update the GPU process exporter image tag
+        if: ${{ !cancelled() && steps.app_token.outcome == 'success' }}
+        env:
+          GH_TOKEN: ${{ steps.app_token.outputs.token }}
+          APP_SLUG: ${{ steps.app_token.outputs.app-slug }}
+          TAG: ${{ steps.version.outputs.image_tag }}
+          CHARTS_REPO: densify-dev/helm-charts
+          CHART_DIR: charts/gpu-process-exporter
+        run: bash .github/scripts/update-helm-chart-tag.sh
 
   github-release:
     needs: publish
