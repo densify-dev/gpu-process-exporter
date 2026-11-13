@@ -61,6 +61,6 @@ for TARGETARCH in amd64 arm64; do
     go build -trimpath \
     -gcflags=-trimpath="${TRIMPATH}" \
     -asmflags=-trimpath="${TRIMPATH}" \
-    -ldflags="-w -s -X github.com/densify-dev/gpu-process-exporter/pkg/prometheus.version=${VERSION} -X github.com/densify-dev/gpu-process-exporter/pkg/prometheus.revision=${REVISION}" \
+    -ldflags="-w -s -X github.com/prometheus/common/version.Version=${VERSION} -X github.com/prometheus/common/version.Revision=${REVISION}" \
     -o bin/${TARGETARCH}/gpu-exporter cmd/main.go
 done

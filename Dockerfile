@@ -57,7 +57,7 @@ RUN set -eux; \
     go build -trimpath \
         -gcflags=-trimpath="${TRIMPATH}" \
         -asmflags=-trimpath="${TRIMPATH}" \
-        -ldflags="-w -s -X github.com/densify-dev/gpu-process-exporter/pkg/prometheus.version=${VERSION} -X github.com/densify-dev/gpu-process-exporter/pkg/prometheus.revision=${REVISION}" \
+        -ldflags="-w -s -X github.com/prometheus/common/version.Version=${VERSION} -X github.com/prometheus/common/version.Revision=${REVISION}" \
         -o "/out/${TARGETARCH}/gpu-exporter" \
         cmd/main.go; \
     go run github.com/google/go-licenses/v2@v2.0.1 save \

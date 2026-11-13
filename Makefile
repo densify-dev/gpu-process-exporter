@@ -8,7 +8,7 @@ GOPATH ?= $(shell $(GO) env GOPATH)
 GOLANGCI_LINT ?= $(GOPATH)/bin/golangci-lint
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 REVISION ?= $(shell git rev-parse HEAD 2>/dev/null || echo unknown)
-BUILD_INFO_FLAGS = -X github.com/densify-dev/gpu-process-exporter/pkg/prometheus.version=$(VERSION) -X github.com/densify-dev/gpu-process-exporter/pkg/prometheus.revision=$(REVISION)
+BUILD_INFO_FLAGS = -X github.com/prometheus/common/version.Version=$(VERSION) -X github.com/prometheus/common/version.Revision=$(REVISION)
 
 .PHONY: all tools lint build build-binary build-multiarch test build-docker-image clean help
 

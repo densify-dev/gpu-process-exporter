@@ -16,11 +16,14 @@ import (
 	"github.com/densify-dev/gpu-process-exporter/pkg/config"
 	"github.com/densify-dev/gpu-process-exporter/pkg/model"
 	"github.com/prometheus/client_golang/prometheus"
+	versioncollector "github.com/prometheus/client_golang/prometheus/collectors/version"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/prometheus/common/version"
 )
 
 const (
+	buildInfoProgram       = "kubex_gpu_process_exporter"
 	LabelGpuUuid           = "gpu_uuid"
 	LabelGpuModel          = "gpu_model"
 	LabelNode              = "node"
@@ -77,11 +80,15 @@ type GpuMetricsProvider struct {
 	AccountingTimeUs         *prometheus.GaugeVec
 	AccountingStartTimeUs    *prometheus.GaugeVec
 	AccountingIsRunning      *prometheus.GaugeVec
-	BuildInfo                prometheus.Gauge
 	fingerprintsMu           sync.Mutex
 	fingerprintsByGauge      map[*prometheus.GaugeVec]map[uint64]bool
 	zeroedMu                 sync.Mutex
 	zeroedPerDevice          map[uint64]bool
+}
+
+func RegisterBuildInfo() {
+	log.Printf("gpu-process-exporter build info: %s %s", version.Info(), version.BuildContext())
+	prometheus.MustRegister(versioncollector.NewCollector(buildInfoProgram))
 }
 
 func NewGpuMetricsProvider() *GpuMetricsProvider {
@@ -96,10 +103,6 @@ func NewGpuMetricsProvider() *GpuMetricsProvider {
 	perDeviceLabels := slices.Clone(containerLabels)
 	perDeviceLabels = append(perDeviceLabels, LabelGpuUuid, LabelGpuModel)
 	protectedMemoryBytes := newGaugeVec(MetricProtectedMemoryBytesName, MetricHelpBytes, perDeviceLabels)
-	buildInfoLabels := BuildInfoLabels()
-	log.Printf("gpu-process-exporter build info: %v", buildInfoLabels)
-	buildInfo := newGauge(MetricBuildInfoName, MetricHelpBuildInfo, buildInfoLabels)
-	buildInfo.Set(1)
 	return &GpuMetricsProvider{
 		Requests:                 newGaugeVec(MetricRequestsName, MetricHelpNumberGpus, containerLabels),
 		Limits:                   newGaugeVec(MetricLimitsName, MetricHelpNumberGpus, containerLabels),
@@ -123,7 +126,6 @@ func NewGpuMetricsProvider() *GpuMetricsProvider {
 			perDeviceLabels,
 		),
 		AccountingIsRunning: newGaugeVec(MetricAccountingIsRunningName, MetricHelpIsRunning, perDeviceLabels),
-		BuildInfo:           buildInfo,
 		fingerprintsByGauge: map[*prometheus.GaugeVec]map[uint64]bool{
 			protectedMemoryBytes: make(map[uint64]bool),
 		},
@@ -324,8 +326,4 @@ func newCounterVec(name, help string, labels []string) *prometheus.CounterVec {
 
 func newGaugeVec(name, help string, labels []string) *prometheus.GaugeVec {
 	return promauto.NewGaugeVec(prometheus.GaugeOpts{Name: name, Help: help}, labels)
-}
-
-func newGauge(name, help string, constLabels prometheus.Labels) prometheus.Gauge {
-	return promauto.NewGauge(prometheus.GaugeOpts{Name: name, Help: help, ConstLabels: constLabels})
 }

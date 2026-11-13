@@ -28,6 +28,8 @@ func run() error {
 	if err != nil {
 		return err
 	}
+
+	prometheus.RegisterBuildInfo()
 	gmp := prometheus.NewGpuMetricsProvider()
 	store, err := kube.NewStore(ctx, cfg, gmp)
 	if err != nil {

@@ -5,32 +5,71 @@ package prometheus
 import (
 	"runtime"
 	"testing"
+
+	clientprom "github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/common/version"
 )
 
-func TestBuildInfoLabels(t *testing.T) {
-	labels := BuildInfoLabels()
-	if len(labels) != 5 {
-		t.Fatalf("label count = %d, want 5", len(labels))
-	}
-	for name, want := range map[string]string{
-		GoArchLabelName:    runtime.GOARCH,
-		GoOsLabelName:      runtime.GOOS,
-		GoVersionLabelName: runtime.Version(),
-		RevisionLabelName:  revision,
-		VersionLabelName:   version,
-	} {
-		if got := labels[name]; got != want {
-			t.Errorf("%s = %q, want %q", name, got, want)
-		}
-	}
-}
+const (
+	metricBuildInfoName = buildInfoProgram + "_build_info"
+)
 
-func TestBuildInfoLabelsWithBuildMetadata(t *testing.T) {
-	originalVersion, originalRevision := version, revision
-	t.Cleanup(func() { version, revision = originalVersion, originalRevision })
-	version, revision = "v1.2.3", "0123456789abcdef0123456789abcdef01234567"
-	labels := BuildInfoLabels()
-	if labels[VersionLabelName] != version || labels[RevisionLabelName] != revision {
-		t.Fatalf("build labels = %v, want version %q and revision %q", labels, version, revision)
+func TestBuildInfo(t *testing.T) {
+	originalVersion, originalRevision := version.Version, version.Revision
+	originalRegisterer := clientprom.DefaultRegisterer
+	t.Cleanup(func() {
+		version.Version, version.Revision = originalVersion, originalRevision
+		clientprom.DefaultRegisterer = originalRegisterer
+	})
+
+	for _, metadata := range []struct {
+		name, version, revision string
+	}{
+		{name: "plain"},
+		{name: "release", version: "v1.2.3", revision: "0123456789abcdef0123456789abcdef01234567"},
+	} {
+		t.Run(metadata.name, func(t *testing.T) {
+			version.Version, version.Revision = metadata.version, metadata.revision
+			registry := clientprom.NewRegistry()
+			clientprom.DefaultRegisterer = registry
+			RegisterBuildInfo()
+
+			families, err := registry.Gather()
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, family := range families {
+				if family.GetName() != metricBuildInfoName {
+					continue
+				}
+				metrics := family.GetMetric()
+				if len(metrics) != 1 || metrics[0].GetGauge().GetValue() != 1 {
+					t.Fatalf("metrics = %v, want one series with value 1", metrics)
+				}
+				labels := map[string]string{}
+				for _, label := range metrics[0].GetLabel() {
+					labels[label.GetName()] = label.GetValue()
+				}
+				wantLabels := map[string]string{
+					"version":   metadata.version,
+					"revision":  version.GetRevision(),
+					"branch":    version.Branch,
+					"goversion": runtime.Version(),
+					"goos":      runtime.GOOS,
+					"goarch":    runtime.GOARCH,
+					"tags":      version.GetTags(),
+				}
+				if len(labels) != len(wantLabels) {
+					t.Fatalf("labels = %v, want %v", labels, wantLabels)
+				}
+				for name, want := range wantLabels {
+					if got, ok := labels[name]; !ok || got != want {
+						t.Errorf("label %s = %q (present: %t), want %q", name, got, ok, want)
+					}
+				}
+				return
+			}
+			t.Fatalf("missing metric %s", metricBuildInfoName)
+		})
 	}
 }

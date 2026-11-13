@@ -87,10 +87,12 @@ Exported metrics:
 | `goarch` | Target Go architecture, such as `amd64` or `arm64`. |
 | `goos` | Target Go operating system, such as `linux`. |
 | `goversion` | Go toolchain version used for the build. |
-| `revision` | Commit hash supplied at build time, or `unknown` for plain Go builds. |
-| `version` | Version supplied at build time, or `dev` for plain Go builds. |
+| `revision` | Commit hash supplied at build time, falling back to Go's recorded VCS revision or `unknown`. |
+| `version` | Version supplied at build time, or empty for plain Go builds. |
+| `branch` | Branch supplied at build time, or empty when unset. |
+| `tags` | Build tags recorded by Go, or `unknown` when unavailable. |
 
-The Go labels come from the running binary's runtime information. Version and revision are injected with linker flags. Release images use the same version and revision for the metric and OCI image labels. The metric does not include the standard container or per-device labels.
+The metric uses the Prometheus version collector (`collectors/version.NewCollector`) and `github.com/prometheus/common/version`. Version and revision are injected with linker flags into that package. Release images use the same version and revision for the metric and OCI image labels. The metric does not include the standard container or per-device labels.
 
 ## Grafana dashboard
 
