@@ -1,0 +1,1 @@
+0::/kubepods.slice/kubepods-besteffort.slice/kubepods-besteffort-pod7bba7f76_c23e_409b_877c_74eef14879d0.slice/crio-c8ed1847ad490a412104b2d70ee58a63f3a4be24ac8d1db20ca36fff325b6d70.scope
