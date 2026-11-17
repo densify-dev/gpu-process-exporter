@@ -24,7 +24,10 @@ part of the contract.
 
 - Only `EXPORTER_ENDPOINT` serves metrics; other paths return 404.
 - Text exposition format 0.0.4, also for the Prometheus 3 default `Accept` header. gzip when requested.
-  Header read timeout 5s.
+  Header read timeout 5s; the connection is then closed without a response.
+- Exact header values: metrics `Content-Type: text/plain; version=0.0.4; charset=utf-8; escaping=underscores`;
+  404 `Content-Type: text/plain; charset=utf-8`. Any method and any query string on the endpoint serve
+  metrics.
 
 ## Pod to container rules
 
@@ -92,5 +95,18 @@ Found while building the harness. Rust keeps them unless decided otherwise.
 - Several PIDs of one container on one device: memory bytes, protected memory, and accounting values are
   last-write-wins in map iteration order, not summed. Only utilization counters sum. Scenarios keep those
   values equal across PIDs so the output is deterministic.
+- Annotation and env numbers use Go `strconv` syntax: hex floats (`0x1p-2`) parse, a leading `+` on an unsigned
+  value (`gpu-memory`, `EXPORTER_PORT`) does not.
+- An accounting stats error drops that cycle's accounting gauges to 0, except `accounting_time_us`, which keeps
+  its last positive value.
 - A container on several devices caches its calculated values (requests, limits, memory total) from whichever
   device is reported first, in map order. Scenarios use equal device totals.
+
+## Open questions
+
+Rust matches Go on these until decided (plan step 7).
+
+- Likely Go bug: OFA and JPG counters never appear. go-nvml calls `nvmlDeviceGetProcessesUtilizationInfo` once with a null
+  array, which the driver answers with `INSUFFICIENT_SIZE`, so the extended API never returns samples.
+- Go serves the protobuf exposition when asked (`Accept: application/vnd.google.protobuf;...`). Prometheus only
+  asks for it with native histograms enabled. Keep it in the contract, or accept text only as a deviation?
