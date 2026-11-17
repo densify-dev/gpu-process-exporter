@@ -1,0 +1,42 @@
+description: >-
+  HTTP behavior on a custom EXPORTER_ENDPOINT: other paths 404, gzip, the Prometheus 3 and OpenMetrics Accept
+  headers (text 0.0.4 is served), any method on the endpoint, and the 5s header read timeout. Stops with SIGINT.
+shutdown_signal: INT
+env: {EXPORTER_ENDPOINT: /custom/path}
+nvml:
+  frames:
+    - devices:
+        - uuid: GPU-00000000-0000-0000-0000-000000000017
+          name: NVIDIA T1000
+          memory_total: 4294967296
+          compute: [{pid: 101, used_memory: 1073741824}]
+steps:
+  - kube:
+      create:
+        metadata: {name: p1}
+        spec: {containers: [{name: c1, resources: {limits: {nvidia.com/gpu: "1"}}}]}
+        status: {phase: Running, containerStatuses: [{name: c1, containerID: "containerd://${cid:c1}", state: {running: {}}}]}
+  - proc: {pid: 101, pod: p1, cid: c1}
+  - check: {name: mapped, non_empty: [kubex_gpu_container_memory_bytes]}
+  - check:
+      name: http
+      non_empty: [kubex_gpu_container_memory_bytes]
+      http:
+        - {name: plain}
+        - {name: gzip, headers: {Accept-Encoding: gzip}}
+        - name: prometheus3
+          headers:
+            Accept: "application/openmetrics-text;version=1.0.0;escaping=allow-utf-8;q=0.6,application/openmetrics-text;version=0.0.1;q=0.5,text/plain;version=1.0.0;escaping=allow-utf-8;q=0.4,text/plain;version=0.0.4;q=0.3,*/*;q=0.2"
+            Accept-Encoding: gzip
+        - {name: openmetrics, headers: {Accept: "application/openmetrics-text;version=1.0.0"}}
+        - {name: protobuf, headers: {Accept: "application/vnd.google.protobuf;proto=io.prometheus.client.MetricFamily;encoding=delimited"}}
+        - {name: query, path: "/custom/path?x=1"}
+        - {name: post, method: POST}
+        - {name: head, method: HEAD}
+        - {name: root, path: /}
+        - {name: default-path, path: /metrics}
+        - {name: trailing-slash, path: /custom/path/}
+        - {name: prefix, path: /custom}
+        - {name: subpath, path: /custom/path/x}
+  - check: {name: stall-4s, stall_headers: 4s}
+  - check: {name: stall-7s, stall_headers: 7s}

@@ -1,0 +1,22 @@
+description: >-
+  Startup outcomes: exit class and whether the port opens. Covers required NODE_NAME, interval and port
+  validation, unparsable values falling back to defaults, Go duration syntax, nvmlInit failure (the port may open
+  briefly, so it is not compared), missing kube config, and RBAC denial.
+startup_cases:
+  - {name: ok}
+  - {name: missing-node-name, unset: [NODE_NAME]}
+  - {name: blank-node-name, env: {NODE_NAME: "   "}}
+  - {name: zero-poll, env: {DRIVER_POLL_INTERVAL: "0s"}}
+  - {name: negative-scrape, env: {SCRAPE_INTERVAL: "-2s"}}
+  - {name: scrape-not-multiple, env: {SCRAPE_INTERVAL: "300ms"}}
+  - {name: port-too-low, env: {EXPORTER_PORT: "80"}}
+  - {name: port-too-high, env: {EXPORTER_PORT: "70000"}}
+  - {name: unparsable-port, env: {EXPORTER_PORT: abc}, port: 9494}
+  - {name: signed-port, env: {EXPORTER_PORT: "+21155"}, port: 9494}
+  - {name: unparsable-poll, env: {DRIVER_POLL_INTERVAL: fast}}
+  - {name: unparsable-scrape, env: {SCRAPE_INTERVAL: "2"}}
+  - {name: go-duration-syntax, env: {DRIVER_POLL_INTERVAL: "250000µs", SCRAPE_INTERVAL: "1m30s"}}
+  - {name: fractional-duration, env: {DRIVER_POLL_INTERVAL: ".25s", SCRAPE_INTERVAL: "0.5s"}}
+  - {name: nvml-init-failure, nvml_returns: {nvmlInit_v2: 999}, check_port: false}
+  - {name: no-kube-config, kubeconfig: none}
+  - {name: rbac-denied, kubeconfig: nobody}

@@ -1,0 +1,44 @@
+description: >-
+  GPU quantities as the apiserver stores them: "1", "1000m" (canonicalized to "1"), request and limit "2", and a
+  limit only (the apiserver defaults the request). Fractional and request-only GPU quantities are rejected by
+  the apiserver, so Quantity.AsInt64 edge cases live in testdata/quantities.json.
+definitions:
+  running: &running {running: {}}
+nvml:
+  frames:
+    - devices:
+        - uuid: GPU-00000000-0000-0000-0000-000000000006
+          name: NVIDIA T1000
+          memory_total: 4294967296
+          compute:
+            - {pid: 101, used_memory: 1073741824}
+            - {pid: 102, used_memory: 1073741824}
+            - {pid: 103, used_memory: 1073741824}
+steps:
+  - kube:
+      create:
+        metadata: {name: q1}
+        spec: {containers: [{name: main, resources: {limits: {nvidia.com/gpu: "1"}}}]}
+        status: {phase: Running, containerStatuses: [{name: main, containerID: "containerd://${cid:q1}", state: *running}]}
+  - kube:
+      create:
+        metadata: {name: q2}
+        spec: {containers: [{name: main, resources: {requests: {nvidia.com/gpu: "1000m"}, limits: {nvidia.com/gpu: "1000m"}}}]}
+        status: {phase: Running, containerStatuses: [{name: main, containerID: "containerd://${cid:q2}", state: *running}]}
+  - kube:
+      create:
+        metadata: {name: q3}
+        spec: {containers: [{name: main, resources: {requests: {nvidia.com/gpu: "2"}, limits: {nvidia.com/gpu: "2"}}}]}
+        status: {phase: Running, containerStatuses: [{name: main, containerID: "containerd://${cid:q3}", state: *running}]}
+  - proc: {pid: 101, pod: q1, cid: q1}
+  - proc: {pid: 102, pod: q2, cid: q2}
+  - proc: {pid: 103, pod: q3, cid: q3}
+  - check:
+      name: quantities
+      non_empty: [kubex_gpu_container_requests, kubex_gpu_container_limits]
+      values:
+        kubex_gpu_container_requests{pod="q1"}: 1
+        kubex_gpu_container_limits{pod="q1"}: 1
+        kubex_gpu_container_requests{pod="q2"}: 1
+        kubex_gpu_container_limits{pod="q3"}: 2
+        kubex_gpu_container_memory_total_bytes{pod="q3"}: 4294967296

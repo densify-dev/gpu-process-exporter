@@ -1,0 +1,93 @@
+description: >-
+  Accounting enabled: all gauges, time_us skipped at 0, zeros for a PID without stats, and a stats error (the
+  gauges drop to 0 except time_us). A device with accounting disabled at first sight never reports accounting,
+  even after it is enabled.
+definitions:
+  gpu0: &gpu0 {uuid: GPU-00000000-0000-0000-0000-000000000120, name: NVIDIA T1000, memory_total: 4294967296, accounting: true}
+  gpu1: &gpu1 {uuid: GPU-00000000-0000-0000-0000-000000000121, name: NVIDIA T1000, memory_total: 4294967296}
+  mem0: &mem0 [{pid: 101, used_memory: 1073741824}, {pid: 102, used_memory: 1073741824}, {pid: 103, used_memory: 1073741824}]
+  mem1: &mem1 [{pid: 201, used_memory: 1073741824}]
+  stats1: &stats1 {201: {gpu: 70, mem: 30, max_memory: 1073741824, time: 5000, start_time: 1700000000000000, is_running: 1}}
+nvml:
+  frames:
+    - devices:
+        - <<: *gpu0
+          compute: *mem0
+          accounting_stats:
+            101: {gpu: 40, mem: 20, max_memory: 536870912, time: 123456, start_time: 1700000000000000, is_running: 1}
+            102: {gpu: 10, mem: 5, max_memory: 268435456, time: 0, start_time: 1700000001000000, is_running: 0}
+        - {<<: *gpu1, compute: *mem1, accounting_stats: *stats1}
+    - devices:
+        - <<: *gpu0
+          compute: *mem0
+          accounting_stats:
+            101: {gpu: 50, mem: 25, max_memory: 805306368, time: 200000, start_time: 1700000000000000, is_running: 1}
+            102: {gpu: 10, mem: 5, max_memory: 268435456, time: 0, start_time: 1700000001000000, is_running: 0}
+        - {<<: *gpu1, compute: *mem1, accounting: true, accounting_stats: *stats1}
+    - devices:
+        - {<<: *gpu0, compute: *mem0}
+        - {<<: *gpu1, compute: *mem1, accounting: true, accounting_stats: *stats1}
+      returns: {"nvmlDeviceGetAccountingStats:0": 999}
+steps:
+  - kube:
+      create:
+        metadata: {name: p1}
+        spec:
+          containers:
+            - {name: c1, resources: {limits: {nvidia.com/gpu: "1"}}}
+            - {name: c2, resources: {limits: {nvidia.com/gpu: "1"}}}
+            - {name: c3, resources: {limits: {nvidia.com/gpu: "1"}}}
+            - {name: c4, resources: {limits: {nvidia.com/gpu: "1"}}}
+        status:
+          phase: Running
+          containerStatuses:
+            - {name: c1, containerID: "containerd://${cid:c1}", state: {running: {}}}
+            - {name: c2, containerID: "containerd://${cid:c2}", state: {running: {}}}
+            - {name: c3, containerID: "containerd://${cid:c3}", state: {running: {}}}
+            - {name: c4, containerID: "containerd://${cid:c4}", state: {running: {}}}
+  - proc: {pid: 101, pod: p1, cid: c1}
+  - proc: {pid: 102, pod: p1, cid: c2}
+  - proc: {pid: 103, pod: p1, cid: c3}
+  - proc: {pid: 201, pod: p1, cid: c4}
+  - check:
+      name: enabled
+      non_empty:
+        - kubex_gpu_container_accounting_gpu_percent
+        - kubex_gpu_container_accounting_memory_percent
+        - kubex_gpu_container_accounting_max_memory_bytes
+        - kubex_gpu_container_accounting_time_us
+        - kubex_gpu_container_accounting_start_time_us
+        - kubex_gpu_container_accounting_is_running
+      values:
+        kubex_gpu_container_accounting_gpu_percent{container="c1"}: 40
+        kubex_gpu_container_accounting_memory_percent{container="c1"}: 20
+        kubex_gpu_container_accounting_max_memory_bytes{container="c1"}: 536870912
+        kubex_gpu_container_accounting_time_us{container="c1"}: 123456
+        kubex_gpu_container_accounting_start_time_us{container="c1"}: 1700000000000000
+        kubex_gpu_container_accounting_is_running{container="c1"}: 1
+        kubex_gpu_container_accounting_is_running{container="c2"}: 0
+        kubex_gpu_container_accounting_gpu_percent{container="c3"}: 0
+        kubex_gpu_container_accounting_start_time_us{container="c3"}: 0
+      absent:
+        - kubex_gpu_container_accounting_time_us{container="c2"}
+        - kubex_gpu_container_accounting_time_us{container="c3"}
+        - kubex_gpu_container_accounting_gpu_percent{container="c4"}
+  - frame: 1
+  - check:
+      name: updated
+      non_empty: [kubex_gpu_container_accounting_gpu_percent]
+      values:
+        kubex_gpu_container_accounting_gpu_percent{container="c1"}: 50
+        kubex_gpu_container_accounting_time_us{container="c1"}: 200000
+      absent:
+        - kubex_gpu_container_accounting_gpu_percent{container="c4"}
+  - frame: 2
+  - check:
+      name: stats-error
+      non_empty: [kubex_gpu_container_accounting_gpu_percent]
+      values:
+        kubex_gpu_container_accounting_gpu_percent{container="c1"}: 0
+        kubex_gpu_container_accounting_max_memory_bytes{container="c1"}: 0
+        kubex_gpu_container_accounting_time_us{container="c1"}: 200000
+      absent:
+        - kubex_gpu_container_accounting_gpu_percent{container="c4"}

@@ -1,0 +1,20 @@
+description: >-
+  Pods that exist before startup come from the initial list. SIGTERM while collecting and serving exits 0
+  within 5s.
+nvml:
+  frames:
+    - devices:
+        - uuid: GPU-00000000-0000-0000-0000-000000000018
+          name: NVIDIA T1000
+          memory_total: 4294967296
+          compute: [{pid: 101, used_memory: 1073741824}]
+          samples: [{pid: 101, ts: 1000000, sm: 50}]
+steps:
+  - kube:
+      create:
+        metadata: {name: p1}
+        spec: {containers: [{name: c1, resources: {limits: {nvidia.com/gpu: "1"}}}]}
+        status: {phase: Running, containerStatuses: [{name: c1, containerID: "containerd://${cid:c1}", state: {running: {}}}]}
+  - proc: {pid: 101, pod: p1, cid: c1}
+  - start
+  - check: {name: serving, non_empty: [kubex_gpu_container_memory_bytes]}

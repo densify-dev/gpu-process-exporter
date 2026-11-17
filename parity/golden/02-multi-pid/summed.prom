@@ -1,0 +1,35 @@
+# HELP kubex_gpu_container_limits Number or fraction of GPUs
+# TYPE kubex_gpu_container_limits gauge
+kubex_gpu_container_limits{container="c1",container_id="d8d5f1186ba9d13fd11a5818678bec64ea36bf187585c7f9e33996187209ca76",gpu_allocation_type="K8sResource",namespace="ns-02-multi-pid",node="node-02-multi-pid",pod="p1"} 1
+kubex_gpu_container_limits{container="c2",container_id="d8d5f2186ba9d2f2d11a5b18678bf17dea36bc187585c2e0e33995187209c8c3",gpu_allocation_type="K8sResource",namespace="ns-02-multi-pid",node="node-02-multi-pid",pod="p1"} 1
+kubex_gpu_container_limits{container="c3",container_id="d8d5f3186ba9d4a5d11a5a18678befcaea36bd187585c493e33994187209c710",gpu_allocation_type="K8sResource",namespace="ns-02-multi-pid",node="node-02-multi-pid",pod="p1"} 1
+# HELP kubex_gpu_container_memory_bytes Bytes
+# TYPE kubex_gpu_container_memory_bytes gauge
+kubex_gpu_container_memory_bytes{container="c1",container_id="d8d5f1186ba9d13fd11a5818678bec64ea36bf187585c7f9e33996187209ca76",gpu_allocation_type="K8sResource",gpu_model="NVIDIA T1000",gpu_uuid="GPU-00000000-0000-0000-0000-000000000002",namespace="ns-02-multi-pid",node="node-02-multi-pid",pod="p1"} 8.05306368e+08
+kubex_gpu_container_memory_bytes{container="c2",container_id="d8d5f2186ba9d2f2d11a5b18678bf17dea36bc187585c2e0e33995187209c8c3",gpu_allocation_type="K8sResource",gpu_model="NVIDIA T1000",gpu_uuid="GPU-00000000-0000-0000-0000-000000000002",namespace="ns-02-multi-pid",node="node-02-multi-pid",pod="p1"} 5.36870912e+08
+kubex_gpu_container_memory_bytes{container="c3",container_id="d8d5f3186ba9d4a5d11a5a18678befcaea36bd187585c493e33994187209c710",gpu_allocation_type="K8sResource",gpu_model="NVIDIA T1000",gpu_uuid="GPU-00000000-0000-0000-0000-000000000002",namespace="ns-02-multi-pid",node="node-02-multi-pid",pod="p1"} 8.05306368e+08
+# HELP kubex_gpu_container_memory_footprint_percent Percent
+# TYPE kubex_gpu_container_memory_footprint_percent gauge
+kubex_gpu_container_memory_footprint_percent{container="c1",container_id="d8d5f1186ba9d13fd11a5818678bec64ea36bf187585c7f9e33996187209ca76",gpu_allocation_type="K8sResource",gpu_model="NVIDIA T1000",gpu_uuid="GPU-00000000-0000-0000-0000-000000000002",namespace="ns-02-multi-pid",node="node-02-multi-pid",pod="p1"} 18.75
+kubex_gpu_container_memory_footprint_percent{container="c2",container_id="d8d5f2186ba9d2f2d11a5b18678bf17dea36bc187585c2e0e33995187209c8c3",gpu_allocation_type="K8sResource",gpu_model="NVIDIA T1000",gpu_uuid="GPU-00000000-0000-0000-0000-000000000002",namespace="ns-02-multi-pid",node="node-02-multi-pid",pod="p1"} 12.5
+kubex_gpu_container_memory_footprint_percent{container="c3",container_id="d8d5f3186ba9d4a5d11a5a18678befcaea36bd187585c493e33994187209c710",gpu_allocation_type="K8sResource",gpu_model="NVIDIA T1000",gpu_uuid="GPU-00000000-0000-0000-0000-000000000002",namespace="ns-02-multi-pid",node="node-02-multi-pid",pod="p1"} 18.75
+# HELP kubex_gpu_container_memory_total_bytes Bytes
+# TYPE kubex_gpu_container_memory_total_bytes gauge
+kubex_gpu_container_memory_total_bytes{container="c1",container_id="d8d5f1186ba9d13fd11a5818678bec64ea36bf187585c7f9e33996187209ca76",gpu_allocation_type="K8sResource",gpu_model="NVIDIA T1000",gpu_uuid="GPU-00000000-0000-0000-0000-000000000002",namespace="ns-02-multi-pid",node="node-02-multi-pid",pod="p1"} 4.294967296e+09
+kubex_gpu_container_memory_total_bytes{container="c2",container_id="d8d5f2186ba9d2f2d11a5b18678bf17dea36bc187585c2e0e33995187209c8c3",gpu_allocation_type="K8sResource",gpu_model="NVIDIA T1000",gpu_uuid="GPU-00000000-0000-0000-0000-000000000002",namespace="ns-02-multi-pid",node="node-02-multi-pid",pod="p1"} 4.294967296e+09
+kubex_gpu_container_memory_total_bytes{container="c3",container_id="d8d5f3186ba9d4a5d11a5a18678befcaea36bd187585c493e33994187209c710",gpu_allocation_type="K8sResource",gpu_model="NVIDIA T1000",gpu_uuid="GPU-00000000-0000-0000-0000-000000000002",namespace="ns-02-multi-pid",node="node-02-multi-pid",pod="p1"} 4.294967296e+09
+# HELP kubex_gpu_container_memory_utilization_percent_seconds_total Accumulated utilization percent-seconds
+# TYPE kubex_gpu_container_memory_utilization_percent_seconds_total counter
+kubex_gpu_container_memory_utilization_percent_seconds_total{container="c2",container_id="d8d5f2186ba9d2f2d11a5b18678bf17dea36bc187585c2e0e33995187209c8c3",gpu_allocation_type="K8sResource",gpu_model="NVIDIA T1000",gpu_uuid="GPU-00000000-0000-0000-0000-000000000002",namespace="ns-02-multi-pid",node="node-02-multi-pid",pod="p1"} 7
+# HELP kubex_gpu_container_requests Number or fraction of GPUs
+# TYPE kubex_gpu_container_requests gauge
+kubex_gpu_container_requests{container="c1",container_id="d8d5f1186ba9d13fd11a5818678bec64ea36bf187585c7f9e33996187209ca76",gpu_allocation_type="K8sResource",namespace="ns-02-multi-pid",node="node-02-multi-pid",pod="p1"} 1
+kubex_gpu_container_requests{container="c2",container_id="d8d5f2186ba9d2f2d11a5b18678bf17dea36bc187585c2e0e33995187209c8c3",gpu_allocation_type="K8sResource",namespace="ns-02-multi-pid",node="node-02-multi-pid",pod="p1"} 1
+kubex_gpu_container_requests{container="c3",container_id="d8d5f3186ba9d4a5d11a5a18678befcaea36bd187585c493e33994187209c710",gpu_allocation_type="K8sResource",namespace="ns-02-multi-pid",node="node-02-multi-pid",pod="p1"} 1
+# HELP kubex_gpu_container_sm_utilization_percent_seconds_total Accumulated utilization percent-seconds
+# TYPE kubex_gpu_container_sm_utilization_percent_seconds_total counter
+kubex_gpu_container_sm_utilization_percent_seconds_total{container="c1",container_id="d8d5f1186ba9d13fd11a5818678bec64ea36bf187585c7f9e33996187209ca76",gpu_allocation_type="K8sResource",gpu_model="NVIDIA T1000",gpu_uuid="GPU-00000000-0000-0000-0000-000000000002",namespace="ns-02-multi-pid",node="node-02-multi-pid",pod="p1"} 10
+kubex_gpu_container_sm_utilization_percent_seconds_total{container="c2",container_id="d8d5f2186ba9d2f2d11a5b18678bf17dea36bc187585c2e0e33995187209c8c3",gpu_allocation_type="K8sResource",gpu_model="NVIDIA T1000",gpu_uuid="GPU-00000000-0000-0000-0000-000000000002",namespace="ns-02-multi-pid",node="node-02-multi-pid",pod="p1"} 14
+# HELP kubex_gpu_process_exporter_build_info A metric with a constant '1' value labeled by version, revision, branch, goversion from which kubex_gpu_process_exporter was built, and the goos and goarch for the build.
+# TYPE kubex_gpu_process_exporter_build_info gauge
+kubex_gpu_process_exporter_build_info{branch="parity",goarch="amd64",goos="linux",goversion="go1.27.4",revision="parity",tags="unknown",version="parity"} 1

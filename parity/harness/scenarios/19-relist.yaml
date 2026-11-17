@@ -1,0 +1,41 @@
+description: >-
+  A pod deleted while the apiserver is down (straight from etcd, then compacted) is only seen through the relist.
+  Its series are removed and the remaining pod keeps updating. Runs alone because it restarts the apiserver.
+exclusive: true
+definitions:
+  gpu: &gpu {uuid: GPU-00000000-0000-0000-0000-000000000019, name: NVIDIA T1000, memory_total: 4294967296}
+  mem: &mem [{pid: 101, used_memory: 1073741824}, {pid: 201, used_memory: 1073741824}]
+nvml:
+  frames:
+    - devices: [{<<: *gpu, compute: *mem}]
+    - devices: [{<<: *gpu, compute: *mem, samples: [{pid: 201, ts: 1000000, sm: 50}]}]
+steps:
+  - kube:
+      create:
+        metadata: {name: p1}
+        spec: {containers: [{name: c1, resources: {limits: {nvidia.com/gpu: "1"}}}]}
+        status: {phase: Running, containerStatuses: [{name: c1, containerID: "containerd://${cid:p1}", state: {running: {}}}]}
+  - kube:
+      create:
+        metadata: {name: p2}
+        spec: {containers: [{name: c1, resources: {limits: {nvidia.com/gpu: "1"}}}]}
+        status: {phase: Running, containerStatuses: [{name: c1, containerID: "containerd://${cid:p2}", state: {running: {}}}]}
+  - proc: {pid: 101, pod: p1, cid: p1}
+  - proc: {pid: 201, pod: p2, cid: p2}
+  - check: {name: mapped, non_empty: [kubex_gpu_container_memory_bytes]}
+  - kube: {restart_apiserver: {delete: [p1]}}
+  - check:
+      name: relisted
+      timeout: 60s
+      non_empty: [kubex_gpu_container_memory_bytes]
+      values:
+        kubex_gpu_container_memory_bytes{pod="p2"}: 1073741824
+      absent:
+        - kubex_gpu_container_memory_bytes{pod="p1"}
+        - kubex_gpu_container_requests{pod="p1"}
+  - frame: 1
+  - check:
+      name: watching
+      non_empty: [kubex_gpu_container_sm_utilization_percent_seconds_total]
+      values:
+        kubex_gpu_container_sm_utilization_percent_seconds_total{pod="p2"}: 10

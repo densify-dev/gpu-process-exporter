@@ -1,0 +1,21 @@
+# HELP kubex_gpu_container_limits Number or fraction of GPUs
+# TYPE kubex_gpu_container_limits gauge
+kubex_gpu_container_limits{container="c1",container_id="1d5a0a7ef18ec2badbafb677f2c20c7f80ce4e8fb252274824a42289c6a26515",gpu_allocation_type="K8sResource",namespace="ns-07-restart",node="node-07-restart",pod="p1"} 1
+# HELP kubex_gpu_container_memory_bytes Bytes
+# TYPE kubex_gpu_container_memory_bytes gauge
+kubex_gpu_container_memory_bytes{container="c1",container_id="1d5a0a7ef18ec2badbafb677f2c20c7f80ce4e8fb252274824a42289c6a26515",gpu_allocation_type="K8sResource",gpu_model="NVIDIA T1000",gpu_uuid="GPU-00000000-0000-0000-0000-000000000007",namespace="ns-07-restart",node="node-07-restart",pod="p1"} 1.073741824e+09
+# HELP kubex_gpu_container_memory_footprint_percent Percent
+# TYPE kubex_gpu_container_memory_footprint_percent gauge
+kubex_gpu_container_memory_footprint_percent{container="c1",container_id="1d5a0a7ef18ec2badbafb677f2c20c7f80ce4e8fb252274824a42289c6a26515",gpu_allocation_type="K8sResource",gpu_model="NVIDIA T1000",gpu_uuid="GPU-00000000-0000-0000-0000-000000000007",namespace="ns-07-restart",node="node-07-restart",pod="p1"} 25
+# HELP kubex_gpu_container_memory_total_bytes Bytes
+# TYPE kubex_gpu_container_memory_total_bytes gauge
+kubex_gpu_container_memory_total_bytes{container="c1",container_id="1d5a0a7ef18ec2badbafb677f2c20c7f80ce4e8fb252274824a42289c6a26515",gpu_allocation_type="K8sResource",gpu_model="NVIDIA T1000",gpu_uuid="GPU-00000000-0000-0000-0000-000000000007",namespace="ns-07-restart",node="node-07-restart",pod="p1"} 4.294967296e+09
+# HELP kubex_gpu_container_requests Number or fraction of GPUs
+# TYPE kubex_gpu_container_requests gauge
+kubex_gpu_container_requests{container="c1",container_id="1d5a0a7ef18ec2badbafb677f2c20c7f80ce4e8fb252274824a42289c6a26515",gpu_allocation_type="K8sResource",namespace="ns-07-restart",node="node-07-restart",pod="p1"} 1
+# HELP kubex_gpu_container_sm_utilization_percent_seconds_total Accumulated utilization percent-seconds
+# TYPE kubex_gpu_container_sm_utilization_percent_seconds_total counter
+kubex_gpu_container_sm_utilization_percent_seconds_total{container="c1",container_id="1d5a0a7ef18ec2badbafb677f2c20c7f80ce4e8fb252274824a42289c6a26515",gpu_allocation_type="K8sResource",gpu_model="NVIDIA T1000",gpu_uuid="GPU-00000000-0000-0000-0000-000000000007",namespace="ns-07-restart",node="node-07-restart",pod="p1"} 10
+# HELP kubex_gpu_process_exporter_build_info A metric with a constant '1' value labeled by version, revision, branch, goversion from which kubex_gpu_process_exporter was built, and the goos and goarch for the build.
+# TYPE kubex_gpu_process_exporter_build_info gauge
+kubex_gpu_process_exporter_build_info{branch="parity",goarch="amd64",goos="linux",goversion="go1.27.4",revision="parity",tags="unknown",version="parity"} 1

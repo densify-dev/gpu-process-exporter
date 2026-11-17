@@ -1,0 +1,46 @@
+description: One K8s-resource container with steady SM and memory utilization over several frames.
+definitions:
+  gpu: &gpu {uuid: GPU-00000000-0000-0000-0000-000000000001, name: NVIDIA T1000, memory_total: 4294967296}
+  mem: &mem [{pid: 101, used_memory: 1073741824}]
+nvml:
+  frames:
+    - devices: [{<<: *gpu, compute: *mem}]
+    - devices:
+        - <<: *gpu
+          compute: *mem
+          samples: [{pid: 101, ts: 1000000, sm: 50, mem: 20}, {pid: 101, ts: 1500000, sm: 60, mem: 30}]
+    - devices:
+        - <<: *gpu
+          compute: *mem
+          samples: [{pid: 101, ts: 2000000, sm: 70, mem: 40}, {pid: 101, ts: 2500000, sm: 80, mem: 50}]
+steps:
+  - kube:
+      create:
+        metadata: {name: p1}
+        spec: {containers: [{name: c1, resources: {limits: {nvidia.com/gpu: "1"}}}]}
+  - kube:
+      status:
+        pod: p1
+        status: {phase: Running, containerStatuses: [{name: c1, containerID: "containerd://${cid:c1}", state: {running: {}}}]}
+  - proc: {pid: 101, pod: p1, cid: c1}
+  - check:
+      name: mapped
+      non_empty: [kubex_gpu_container_memory_bytes, kubex_gpu_container_requests, kubex_gpu_container_limits]
+      values:
+        kubex_gpu_container_memory_bytes{pod="p1"}: 1073741824
+        kubex_gpu_container_memory_footprint_percent{pod="p1"}: 25
+        kubex_gpu_container_requests{pod="p1"}: 1
+  - frame: 1
+  - check:
+      name: frame1
+      non_empty: [kubex_gpu_container_sm_utilization_percent_seconds_total]
+      values:
+        kubex_gpu_container_sm_utilization_percent_seconds_total{pod="p1"}: 40
+        kubex_gpu_container_memory_utilization_percent_seconds_total{pod="p1"}: 19
+  - frame: 2
+  - check:
+      name: frame2
+      non_empty: [kubex_gpu_container_sm_utilization_percent_seconds_total]
+      values:
+        kubex_gpu_container_sm_utilization_percent_seconds_total{pod="p1"}: 115
+        kubex_gpu_container_memory_utilization_percent_seconds_total{pod="p1"}: 64

@@ -8,9 +8,10 @@ GOPATH ?= $(shell $(GO) env GOPATH)
 GOLANGCI_LINT ?= $(GOPATH)/bin/golangci-lint
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 REVISION ?= $(shell git rev-parse HEAD 2>/dev/null || echo unknown)
+PARITY_CANDIDATE ?= target/parity/gpu-exporter-go
 BUILD_INFO_FLAGS = -X github.com/prometheus/common/version.Version=$(VERSION) -X github.com/prometheus/common/version.Revision=$(REVISION)
 
-.PHONY: all tools lint build build-binary build-multiarch test build-docker-image clean help
+.PHONY: all tools lint build build-binary build-multiarch test build-docker-image parity clean help
 
 all: test
 
@@ -64,6 +65,9 @@ build-docker-image: test
 	@echo "Building Docker image..."
 	@./build-docker-image.sh
 
+parity:
+	@parity/run.sh --candidate $(PARITY_CANDIDATE) $(PARITY_ARGS)
+
 clean:
 	@echo "Cleaning build output..."
 	@rm -rf bin
@@ -78,5 +82,6 @@ help:
 	@echo "  build-multiarch     Run build.sh"
 	@echo "  test                Run go test and go test -race"
 	@echo "  build-docker-image  Run build-docker-image.sh"
+	@echo "  parity              Run the differential parity harness (PARITY_CANDIDATE, PARITY_ARGS)"
 	@echo "  clean               Delete bin/"
 	@echo "  help                Show this help"

@@ -1,0 +1,51 @@
+description: >-
+  Two GPUs, one container on both and a second container on one. Each device keeps its own lastSeen. Device
+  totals are equal because a multi-device container caches calculated values from whichever device Go reports
+  first.
+definitions:
+  gpu0: &gpu0 {uuid: GPU-00000000-0000-0000-0000-000000000110, name: NVIDIA T1000, memory_total: 4294967296}
+  gpu1: &gpu1 {uuid: GPU-00000000-0000-0000-0000-000000000111, name: NVIDIA A2, memory_total: 4294967296}
+  mem0: &mem0 [{pid: 101, used_memory: 1073741824}]
+  mem1: &mem1 [{pid: 101, used_memory: 2147483648}, {pid: 201, used_memory: 536870912}]
+nvml:
+  frames:
+    - devices: [{<<: *gpu0, compute: *mem0}, {<<: *gpu1, compute: *mem1}]
+    - devices:
+        - {<<: *gpu0, compute: *mem0, samples: [{pid: 101, ts: 1000000, sm: 50}]}
+        - {<<: *gpu1, compute: *mem1, samples: [{pid: 101, ts: 2000000, sm: 20}, {pid: 201, ts: 2000000, sm: 40}]}
+    - devices:
+        - {<<: *gpu0, compute: *mem0, samples: [{pid: 101, ts: 1500000, sm: 10}]}
+        - {<<: *gpu1, compute: *mem1, samples: [{pid: 101, ts: 2100000, sm: 10}]}
+steps:
+  - kube:
+      create:
+        metadata: {name: p1}
+        spec:
+          containers:
+            - {name: c1, resources: {limits: {nvidia.com/gpu: "2"}}}
+            - {name: c2, resources: {limits: {nvidia.com/gpu: "1"}}}
+        status:
+          phase: Running
+          containerStatuses:
+            - {name: c1, containerID: "containerd://${cid:c1}", state: {running: {}}}
+            - {name: c2, containerID: "containerd://${cid:c2}", state: {running: {}}}
+  - proc: {pid: 101, pod: p1, cid: c1}
+  - proc: {pid: 201, pod: p1, cid: c2}
+  - check:
+      name: mapped
+      non_empty: [kubex_gpu_container_memory_bytes]
+      values:
+        kubex_gpu_container_memory_bytes{container="c1",gpu_model="NVIDIA T1000"}: 1073741824
+        kubex_gpu_container_memory_bytes{container="c1",gpu_model="NVIDIA A2"}: 2147483648
+        kubex_gpu_container_memory_bytes{container="c2",gpu_uuid="GPU-00000000-0000-0000-0000-000000000111"}: 536870912
+        kubex_gpu_container_requests{container="c1"}: 2
+      absent: ['kubex_gpu_container_memory_bytes{container="c2",gpu_model="NVIDIA T1000"}']
+  - frame: 1
+  - frame: 2
+  - check:
+      name: per-device
+      non_empty: [kubex_gpu_container_sm_utilization_percent_seconds_total]
+      values:
+        kubex_gpu_container_sm_utilization_percent_seconds_total{container="c1",gpu_model="NVIDIA T1000"}: 15
+        kubex_gpu_container_sm_utilization_percent_seconds_total{container="c1",gpu_model="NVIDIA A2"}: 5
+        kubex_gpu_container_sm_utilization_percent_seconds_total{container="c2"}: 8

@@ -1,0 +1,59 @@
+description: >-
+  A PID in both the compute and graphics lists uses the max, whichever list holds it. Several PIDs in one
+  container sum their utilization; they report equal memory, because Go keeps the last write in map order.
+definitions:
+  gpu: &gpu {uuid: GPU-00000000-0000-0000-0000-000000000002, name: NVIDIA T1000, memory_total: 4294967296}
+  compute: &compute
+    - {pid: 101, used_memory: 268435456}
+    - {pid: 103, used_memory: 805306368}
+    - {pid: 201, used_memory: 536870912}
+    - {pid: 202, used_memory: 536870912}
+  graphics: &graphics [{pid: 101, used_memory: 805306368}, {pid: 103, used_memory: 268435456}]
+  running: &running {running: {}}
+nvml:
+  frames:
+    - devices: [{<<: *gpu, compute: *compute, graphics: *graphics}]
+    - devices:
+        - <<: *gpu
+          compute: *compute
+          graphics: *graphics
+          samples:
+            - {pid: 201, ts: 1000000, sm: 30, mem: 10}
+            - {pid: 202, ts: 1000000, sm: 20, mem: 5}
+            - {pid: 101, ts: 1000000, sm: 50}
+            - {pid: 201, ts: 1400000, sm: 10, mem: 10}
+steps:
+  - kube:
+      create:
+        metadata: {name: p1}
+        spec:
+          containers:
+            - {name: c1, resources: {limits: {nvidia.com/gpu: "1"}}}
+            - {name: c2, resources: {limits: {nvidia.com/gpu: "1"}}}
+            - {name: c3, resources: {limits: {nvidia.com/gpu: "1"}}}
+        status:
+          phase: Running
+          containerStatuses:
+            - {name: c1, containerID: "containerd://${cid:c1}", state: *running}
+            - {name: c2, containerID: "containerd://${cid:c2}", state: *running}
+            - {name: c3, containerID: "containerd://${cid:c3}", state: *running}
+  - proc: {pid: 101, pod: p1, cid: c1}
+  - proc: {pid: 103, pod: p1, cid: c3}
+  - proc: {pid: 201, pod: p1, cid: c2}
+  - proc: {pid: 202, pod: p1, cid: c2}
+  - check:
+      name: mapped
+      non_empty: [kubex_gpu_container_memory_bytes]
+      values:
+        kubex_gpu_container_memory_bytes{container="c1"}: 805306368
+        kubex_gpu_container_memory_footprint_percent{container="c1"}: 18.75
+        kubex_gpu_container_memory_bytes{container="c3"}: 805306368
+        kubex_gpu_container_memory_bytes{container="c2"}: 536870912
+  - frame: 1
+  - check:
+      name: summed
+      non_empty: [kubex_gpu_container_sm_utilization_percent_seconds_total]
+      values:
+        kubex_gpu_container_sm_utilization_percent_seconds_total{container="c2"}: 14
+        kubex_gpu_container_memory_utilization_percent_seconds_total{container="c2"}: 7
+        kubex_gpu_container_sm_utilization_percent_seconds_total{container="c1"}: 10

@@ -1,0 +1,65 @@
+description: >-
+  KAI annotation removed: without terminal evidence the container keeps reporting; with a deletionTimestamp it
+  finishes at that time; with phase Failed it finishes now. Terminal evidence alone does not finish a container
+  that is still desired.
+definitions:
+  running: &running {running: {}}
+  gpu: &gpu {uuid: GPU-00000000-0000-0000-0000-000000000009, name: NVIDIA T1000, memory_total: 4294967296}
+  remove: &remove {metadata: {annotations: {gpu-fraction: null}}}
+nvml:
+  frames:
+    - devices:
+        - <<: *gpu
+          compute: [{pid: 101, used_memory: 1073741824}, {pid: 201, used_memory: 1073741824}, {pid: 301, used_memory: 1073741824}]
+    - devices:
+        - <<: *gpu
+          compute: [{pid: 101, used_memory: 2147483648}, {pid: 201, used_memory: 2147483648}, {pid: 301, used_memory: 2147483648}]
+steps:
+  - kube:
+      create:
+        metadata: {name: k1, annotations: {gpu-fraction: "0.5"}}
+        spec: {containers: [{name: main}]}
+        status: {phase: Running, containerStatuses: [{name: main, containerID: "containerd://${cid:k1}", state: *running}]}
+  - kube:
+      create:
+        metadata: {name: k2, annotations: {gpu-fraction: "0.5"}}
+        spec: {containers: [{name: main}]}
+        status: {phase: Running, containerStatuses: [{name: main, containerID: "containerd://${cid:k2}", state: *running}]}
+  - kube:
+      create:
+        metadata: {name: k3, annotations: {gpu-fraction: "0.5"}}
+        spec: {containers: [{name: main}]}
+        status: {phase: Running, containerStatuses: [{name: main, containerID: "containerd://${cid:k3}", state: *running}]}
+  - proc: {pid: 101, pod: k1, cid: k1}
+  - proc: {pid: 201, pod: k2, cid: k2}
+  - proc: {pid: 301, pod: k3, cid: k3}
+  - check: {name: mapped, non_empty: [kubex_gpu_container_memory_bytes]}
+  - kube: {delete: {pod: k2, grace: 300}}
+  - kube: {status: {pod: k3, status: {phase: Failed}}}
+  - check:
+      name: evidence-while-desired
+      non_empty: [kubex_gpu_container_memory_bytes]
+      values:
+        kubex_gpu_container_memory_bytes{pod="k2"}: 1073741824
+        kubex_gpu_container_memory_bytes{pod="k3"}: 1073741824
+  - kube: {patch: {pod: k1, patch: *remove}}
+  - kube: {patch: {pod: k2, patch: *remove}}
+  - kube: {patch: {pod: k3, patch: *remove}}
+  - check:
+      name: removed
+      non_empty: [kubex_gpu_container_memory_bytes]
+      values:
+        kubex_gpu_container_memory_bytes{pod="k1"}: 1073741824
+        kubex_gpu_container_memory_bytes{pod="k2"}: 0
+        kubex_gpu_container_memory_bytes{pod="k3"}: 0
+  - frame: 1
+  - check:
+      name: after
+      timeout: 15s
+      non_empty: [kubex_gpu_container_memory_bytes]
+      values:
+        kubex_gpu_container_memory_bytes{pod="k1"}: 2147483648
+        kubex_gpu_container_requests{pod="k1"}: 0.5
+        kubex_gpu_container_memory_bytes{pod="k2"}: 0
+      absent:
+        - kubex_gpu_container_memory_bytes{pod="k3"}
