@@ -1,0 +1,72 @@
+description: >-
+  Container restart with a new ID. The old series are zeroed (protected memory is created), memory is not written
+  back while the old PID still runs, the old series are removed after the TTL (finish time 3s ahead, so the zeroed
+  state lasts long enough to compare), and removal clears the PID cache so the PID remaps.
+definitions:
+  gpu: &gpu {uuid: GPU-00000000-0000-0000-0000-000000000007, name: NVIDIA T1000, memory_total: 4294967296}
+  half: &half [{pid: 101, used_memory: 536870912}, {pid: 102, used_memory: 536870912}]
+nvml:
+  frames:
+    - devices: [{<<: *gpu, compute: [{pid: 101, used_memory: 1073741824}]}]
+    - devices: [{<<: *gpu, compute: [{pid: 101, used_memory: 1073741824}], samples: [{pid: 101, ts: 1000000, sm: 50}]}]
+    - devices: [{<<: *gpu, compute: *half, samples: [{pid: 102, ts: 1200000, sm: 40}]}]
+    - devices: [{<<: *gpu, compute: *half, samples: [{pid: 101, ts: 1500000, sm: 20}]}]
+steps:
+  - kube:
+      create:
+        metadata: {name: p1}
+        spec: {containers: [{name: c1, resources: {limits: {nvidia.com/gpu: "1"}}}]}
+        status: {phase: Running, containerStatuses: [{name: c1, containerID: "containerd://${cid:c1a}", state: {running: {}}}]}
+  - proc: {pid: 101, pod: p1, cid: c1a}
+  - frame: 1
+  - check:
+      name: running
+      non_empty: [kubex_gpu_container_sm_utilization_percent_seconds_total]
+      values:
+        kubex_gpu_container_sm_utilization_percent_seconds_total{container_id="${cid:c1a}"}: 10
+      absent: [kubex_gpu_container_protected_memory_bytes]
+  - kube:
+      status:
+        pod: p1
+        status:
+          containerStatuses:
+            - name: c1
+              containerID: "containerd://${cid:c1b}"
+              restartCount: 1
+              state: {running: {}}
+              lastState: {terminated: {containerID: "containerd://${cid:c1a}", exitCode: 1, finishedAt: "${now+3s}"}}
+  - check:
+      name: zeroed
+      non_empty: [kubex_gpu_container_protected_memory_bytes]
+      values:
+        kubex_gpu_container_memory_bytes{container_id="${cid:c1a}"}: 0
+        kubex_gpu_container_memory_footprint_percent{container_id="${cid:c1a}"}: 0
+        kubex_gpu_container_protected_memory_bytes{container_id="${cid:c1a}"}: 0
+        kubex_gpu_container_sm_utilization_percent_seconds_total{container_id="${cid:c1a}"}: 10
+  - proc: {pid: 102, pod: p1, cid: c1b}
+  - proc: {pid: 101, pod: p1, cid: c1b}
+  - frame: 2
+  - check:
+      name: no-resurrection
+      non_empty: [kubex_gpu_container_memory_bytes]
+      values:
+        kubex_gpu_container_memory_bytes{container_id="${cid:c1a}"}: 0
+        kubex_gpu_container_memory_total_bytes{container_id="${cid:c1a}"}: 4294967296
+        kubex_gpu_container_memory_bytes{container_id="${cid:c1b}"}: 536870912
+        kubex_gpu_container_sm_utilization_percent_seconds_total{container_id="${cid:c1b}"}: 8
+  - check:
+      name: removed
+      timeout: 15s
+      non_empty: [kubex_gpu_container_memory_bytes]
+      absent:
+        - kubex_gpu_container_memory_bytes{container_id="${cid:c1a}"}
+        - kubex_gpu_container_memory_total_bytes{container_id="${cid:c1a}"}
+        - kubex_gpu_container_sm_utilization_percent_seconds_total{container_id="${cid:c1a}"}
+        - kubex_gpu_container_protected_memory_bytes{container_id="${cid:c1a}"}
+        - kubex_gpu_container_requests{container_id="${cid:c1a}"}
+  - frame: 3
+  - check:
+      name: remapped
+      non_empty: [kubex_gpu_container_sm_utilization_percent_seconds_total]
+      values:
+        kubex_gpu_container_sm_utilization_percent_seconds_total{container_id="${cid:c1b}"}: 14

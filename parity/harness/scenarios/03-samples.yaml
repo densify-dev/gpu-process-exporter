@@ -1,0 +1,66 @@
+description: >-
+  Samples out of order, a duplicate (timestamp, PID), samples at or below lastSeen (the fake serves them anyway;
+  c2 only has such samples, so it must never appear), and a gap of several ticks.
+definitions:
+  gpu: &gpu {uuid: GPU-00000000-0000-0000-0000-000000000003, name: NVIDIA T1000, memory_total: 4294967296}
+  mem: &mem [{pid: 101, used_memory: 1073741824}, {pid: 102, used_memory: 1073741824}]
+  pod: &pod
+    metadata: {name: p1}
+    spec:
+      containers:
+        - {name: c1, resources: {limits: {nvidia.com/gpu: "1"}}}
+        - {name: c2, resources: {limits: {nvidia.com/gpu: "1"}}}
+    status:
+      phase: Running
+      containerStatuses:
+        - {name: c1, containerID: "containerd://${cid:c1}", state: {running: {}}}
+        - {name: c2, containerID: "containerd://${cid:c2}", state: {running: {}}}
+nvml:
+  frames:
+    - devices: [{<<: *gpu, compute: *mem}]
+    - devices:
+        - <<: *gpu
+          compute: *mem
+          samples:
+            - {pid: 101, ts: 1300000, sm: 40}
+            - {pid: 101, ts: 1000000, sm: 10}
+            - {pid: 102, ts: 1300000, sm: 5}
+            - {pid: 101, ts: 1300000, sm: 60}
+            - {pid: 101, ts: 1100000, sm: 20}
+    - devices:
+        - <<: *gpu
+          compute: *mem
+          ignore_last_seen: true
+          samples:
+            - {pid: 101, ts: 1200000, sm: 99}
+            - {pid: 101, ts: 1300000, sm: 99}
+            - {pid: 201, ts: 1300000, sm: 99}
+            - {pid: 201, ts: 1200000, sm: 99}
+            - {pid: 101, ts: 1500000, sm: 50}
+    - devices: [{<<: *gpu, compute: *mem, samples: [{pid: 101, ts: 4500000, sm: 10}]}]
+steps:
+  - kube: {create: *pod}
+  - proc: {pid: 101, pod: p1, cid: c1}
+  - proc: {pid: 102, pod: p1, cid: c1}
+  - proc: {pid: 201, pod: p1, cid: c2}
+  - check: {name: mapped, non_empty: [kubex_gpu_container_memory_bytes]}
+  - frame: 1
+  - check:
+      name: unordered
+      non_empty: [kubex_gpu_container_sm_utilization_percent_seconds_total]
+      values:
+        kubex_gpu_container_sm_utilization_percent_seconds_total{container="c1"}: 17
+  - frame: 2
+  - check:
+      name: stale
+      non_empty: [kubex_gpu_container_sm_utilization_percent_seconds_total]
+      values:
+        kubex_gpu_container_sm_utilization_percent_seconds_total{container="c1"}: 27
+      absent:
+        - kubex_gpu_container_memory_bytes{container="c2"}
+  - frame: 3
+  - check:
+      name: gap
+      non_empty: [kubex_gpu_container_sm_utilization_percent_seconds_total]
+      values:
+        kubex_gpu_container_sm_utilization_percent_seconds_total{container="c1"}: 57

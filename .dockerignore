@@ -3,13 +3,20 @@
 # Ignore everything by default and re-include only build inputs.
 **
 
-!go.mod
-!go.sum
-!cmd/
-!cmd/**
-!pkg/
-!pkg/**
-**/*_test.go
+!Cargo.toml
+!Cargo.lock
+!rust-toolchain.toml
+!crates/
+!crates/**
+# Workspace members must be present for cargo to load the workspace.
+!parity/fake-nvml/
+!parity/fake-nvml/**
+!parity/harness/Cargo.toml
+!parity/harness/src/
+!parity/harness/src/**
+!about.toml
+!about.hbs
+!build.sh
 !entrypoint.sh
 !LICENSE
 !NOTICE

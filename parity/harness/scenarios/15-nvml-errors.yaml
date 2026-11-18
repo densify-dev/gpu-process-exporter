@@ -1,0 +1,118 @@
+description: >-
+  NVML errors: handle, UUID, name, and total memory failures skip the device for the cycle; device info is cached
+  on first success (MemoryInfo_v1 is the fallback); utilization NOT_SUPPORTED skips counters; a device count
+  failure skips the whole cycle.
+definitions:
+  gpu0: &gpu0 {uuid: GPU-00000000-0000-0000-0000-000000000150, name: NVIDIA T1000, memory_total: 4294967296}
+  gpu1: &gpu1 {uuid: GPU-00000000-0000-0000-0000-000000000151, name: NVIDIA T1000, memory_total: 4294967296}
+  gpu2: &gpu2 {uuid: GPU-00000000-0000-0000-0000-000000000152, name: NVIDIA T1000, memory_total: 4294967296}
+  gpu3: &gpu3 {uuid: GPU-00000000-0000-0000-0000-000000000153, name: NVIDIA T1000, memory_total: 2147483648}
+  one: &one
+    - {<<: *gpu0, compute: [{pid: 101, used_memory: 1073741824}]}
+    - {<<: *gpu1, compute: [{pid: 201, used_memory: 1073741824}]}
+    - {<<: *gpu2, compute: [{pid: 301, used_memory: 1073741824}]}
+    - {<<: *gpu3, compute: [{pid: 401, used_memory: 1073741824}]}
+  two: &two
+    - {<<: *gpu0, compute: [{pid: 101, used_memory: 2147483648}], samples: [{pid: 101, ts: 1000000, sm: 50}]}
+    - {<<: *gpu1, compute: [{pid: 201, used_memory: 2147483648}]}
+    - {<<: *gpu2, compute: [{pid: 301, used_memory: 2147483648}]}
+    - {<<: *gpu3, compute: [{pid: 401, used_memory: 2147483648}]}
+  three: &three
+    - {<<: *gpu0, compute: [{pid: 101, used_memory: 3221225472}]}
+    - {<<: *gpu1, compute: [{pid: 201, used_memory: 3221225472}]}
+    - {<<: *gpu2, compute: [{pid: 301, used_memory: 3221225472}]}
+    - {<<: *gpu3, compute: [{pid: 401, used_memory: 1610612736}]}
+nvml:
+  frames:
+    - devices: *one
+      returns:
+        "nvmlDeviceGetHandleByIndex_v2:1": 999
+        "nvmlDeviceGetUUID:2": 999
+        "nvmlDeviceGetMemoryInfo_v2:3": 3
+        "nvmlDeviceGetMemoryInfo:3": 999
+    - devices: *two
+      returns:
+        "nvmlDeviceGetHandleByIndex_v2:1": 999
+        "nvmlDeviceGetUUID:2": 999
+        "nvmlDeviceGetMemoryInfo_v2:3": 3
+        "nvmlDeviceGetMemoryInfo:3": 999
+        "nvmlDeviceGetProcessUtilization:0": 3
+    - devices: *two
+      returns: {"nvmlDeviceGetUUID:2": 999, "nvmlDeviceGetMemoryInfo_v2:3": 3}
+    - devices: *three
+      returns: {nvmlDeviceGetCount_v2: 999}
+    - devices: *three
+      returns: {"nvmlDeviceGetName:2": 999}
+    - devices: *three
+      returns: {"nvmlDeviceGetName:0": 999, "nvmlDeviceGetMemoryInfo_v2:0": 999, "nvmlDeviceGetMemoryInfo:0": 999}
+steps:
+  - kube:
+      create:
+        metadata: {name: p1}
+        spec:
+          containers:
+            - {name: c1, resources: {limits: {nvidia.com/gpu: "1"}}}
+            - {name: c2, resources: {limits: {nvidia.com/gpu: "1"}}}
+            - {name: c3, resources: {limits: {nvidia.com/gpu: "1"}}}
+            - {name: c4, resources: {limits: {nvidia.com/gpu: "1"}}}
+        status:
+          phase: Running
+          containerStatuses:
+            - {name: c1, containerID: "containerd://${cid:c1}", state: {running: {}}}
+            - {name: c2, containerID: "containerd://${cid:c2}", state: {running: {}}}
+            - {name: c3, containerID: "containerd://${cid:c3}", state: {running: {}}}
+            - {name: c4, containerID: "containerd://${cid:c4}", state: {running: {}}}
+  - proc: {pid: 101, pod: p1, cid: c1}
+  - proc: {pid: 201, pod: p1, cid: c2}
+  - proc: {pid: 301, pod: p1, cid: c3}
+  - proc: {pid: 401, pod: p1, cid: c4}
+  - check:
+      name: skipped
+      non_empty: [kubex_gpu_container_memory_bytes]
+      values:
+        kubex_gpu_container_memory_bytes{container="c1"}: 1073741824
+      absent:
+        - kubex_gpu_container_memory_bytes{container="c2"}
+        - kubex_gpu_container_memory_bytes{container="c3"}
+        - kubex_gpu_container_memory_bytes{container="c4"}
+  - frame: 1
+  - check:
+      name: util-not-supported
+      non_empty: [kubex_gpu_container_memory_bytes]
+      values:
+        kubex_gpu_container_memory_bytes{container="c1"}: 2147483648
+      absent: [kubex_gpu_container_sm_utilization_percent_seconds_total]
+  - frame: 2
+  - check:
+      name: recovered
+      non_empty: [kubex_gpu_container_sm_utilization_percent_seconds_total]
+      values:
+        kubex_gpu_container_sm_utilization_percent_seconds_total{container="c1"}: 10
+        kubex_gpu_container_memory_bytes{container="c2"}: 2147483648
+        kubex_gpu_container_memory_total_bytes{container="c4"}: 2147483648
+      absent:
+        - kubex_gpu_container_memory_bytes{container="c3"}
+  - frame: 3
+  - check:
+      name: count-failure
+      non_empty: [kubex_gpu_container_memory_bytes]
+      values:
+        kubex_gpu_container_memory_bytes{container="c1"}: 2147483648
+        kubex_gpu_container_memory_bytes{container="c4"}: 2147483648
+  - frame: 4
+  - check:
+      name: name-failure
+      non_empty: [kubex_gpu_container_memory_bytes]
+      values:
+        kubex_gpu_container_memory_bytes{container="c1"}: 3221225472
+        kubex_gpu_container_memory_footprint_percent{container="c4"}: 75
+      absent:
+        - kubex_gpu_container_memory_bytes{container="c3"}
+  - frame: 5
+  - check:
+      name: cached-info
+      non_empty: [kubex_gpu_container_memory_bytes]
+      values:
+        kubex_gpu_container_memory_bytes{container="c1"}: 3221225472
+        kubex_gpu_container_memory_total_bytes{container="c1"}: 4294967296
+        kubex_gpu_container_memory_bytes{container="c3"}: 3221225472

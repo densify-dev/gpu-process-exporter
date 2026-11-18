@@ -2,67 +2,51 @@
 
 SHELL := /bin/bash
 
-LINTER_VERSION ?= v2.15.0
-GO ?= go
-GOPATH ?= $(shell $(GO) env GOPATH)
-GOLANGCI_LINT ?= $(GOPATH)/bin/golangci-lint
-VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
-REVISION ?= $(shell git rev-parse HEAD 2>/dev/null || echo unknown)
-BUILD_INFO_FLAGS = -X github.com/prometheus/common/version.Version=$(VERSION) -X github.com/prometheus/common/version.Revision=$(REVISION)
+CARGO_DENY_VERSION ?= 0.21.0
+CARGO ?= cargo
+PARITY_CANDIDATE ?= target/debug/gpu-exporter
 
-.PHONY: all tools lint build build-binary build-multiarch test build-docker-image clean help
+.PHONY: all tools lint build build-binary build-multiarch test build-docker-image parity clean help
 
 all: test
 
 tools:
-	@installed_version=""; \
-	if [ -x "$(GOLANGCI_LINT)" ]; then \
-		installed_version="v$$("$(GOLANGCI_LINT)" --version | awk '{print $$4}')"; \
-	fi; \
-	if [ "$$installed_version" = "$(LINTER_VERSION)" ]; then \
-		echo "golangci-lint $(LINTER_VERSION) is already installed."; \
+	@installed_version="$$($(CARGO) deny --version 2>/dev/null | awk '{print $$2}')"; \
+	if [ "$$installed_version" = "$(CARGO_DENY_VERSION)" ]; then \
+		echo "cargo-deny $(CARGO_DENY_VERSION) is already installed."; \
 	else \
-		echo "Installing golangci-lint $(LINTER_VERSION)..."; \
-		$(GO) install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(LINTER_VERSION); \
+		echo "Installing cargo-deny $(CARGO_DENY_VERSION)..."; \
+		$(CARGO) install --locked cargo-deny@$(CARGO_DENY_VERSION); \
 	fi
 
 lint: tools
-	@echo "Running golangci-lint..."
-	@$(GOLANGCI_LINT) run ./...
+	@echo "Running rustfmt, clippy, cargo-deny, and the test map check..."
+	@$(CARGO) fmt --all --check
+	@$(CARGO) clippy --workspace --all-targets --locked -- -D warnings
+	@$(CARGO) deny check advisories licenses
+	@parity/check-test-map.sh
 
 build: clean lint
 	@echo "Building packages..."
-	@$(GO) build -ldflags="$(BUILD_INFO_FLAGS)" ./...
+	@$(CARGO) build --workspace --locked
 
 build-binary: clean
-	@case "$$(uname -m)" in \
-		x86_64|amd64) TARGETARCH=amd64 ;; \
-		aarch64|arm64) TARGETARCH=arm64 ;; \
-		*) echo "Unsupported host architecture: $$(uname -m)" >&2; exit 1 ;; \
-	esac; \
-	mkdir -p bin/$$TARGETARCH; \
-	echo "Building linux/$$TARGETARCH executable..."; \
-	GOOS=linux \
-	GOARCH=$$TARGETARCH \
-	CGO_ENABLED=1 \
-	CGO_CFLAGS="-Wno-deprecated-declarations" \
-	CC=gcc \
-	$(GO) build -trimpath \
-	-ldflags="-w -s $(BUILD_INFO_FLAGS)" \
-	-o bin/$$TARGETARCH/gpu-exporter cmd/main.go
+	@TARGETARCHES=host ./build.sh
 
 build-multiarch: clean lint
 	@echo "Building multi-arch binaries..."
-	@VERSION="$(VERSION)" REVISION="$(REVISION)" ./build.sh
+	@./build.sh
 
 test: lint
 	@echo "Running tests..."
-	@$(GO) test ./...
-	@$(GO) test -race ./...
+	@$(CARGO) test --workspace --locked
 
 build-docker-image: test
 	@echo "Building Docker image..."
 	@./build-docker-image.sh
+
+parity:
+	@parity/run.sh --candidate $(PARITY_CANDIDATE) $(PARITY_ARGS)
 
 clean:
 	@echo "Cleaning build output..."
@@ -71,12 +55,13 @@ clean:
 help:
 	@echo "Available targets:"
 	@echo "  all                 Run test (default)"
-	@echo "  tools               Install golangci-lint $(LINTER_VERSION)"
-	@echo "  lint                Run golangci-lint"
-	@echo "  build               Run go build ./..."
-	@echo "  build-binary        Build linux executable for the runner architecture"
+	@echo "  tools               Install cargo-deny $(CARGO_DENY_VERSION)"
+	@echo "  lint                Run rustfmt, clippy, cargo-deny, and parity/check-test-map.sh"
+	@echo "  build               Run cargo build --workspace"
+	@echo "  build-binary        Build the release executable for the host architecture"
 	@echo "  build-multiarch     Run build.sh"
-	@echo "  test                Run go test and go test -race"
+	@echo "  test                Run cargo test --workspace"
 	@echo "  build-docker-image  Run build-docker-image.sh"
+	@echo "  parity              Run the differential parity harness (PARITY_CANDIDATE, PARITY_ARGS)"
 	@echo "  clean               Delete bin/"
 	@echo "  help                Show this help"

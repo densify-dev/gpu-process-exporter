@@ -1,0 +1,68 @@
+description: >-
+  The reservation namespace and the reservation annotation skip the K8s-resource path but not the KAI path. An
+  empty reservation annotation does not count. KAI wins over K8s for the same container.
+definitions:
+  running: &running {running: {}}
+  gpu1: &gpu1 {resources: {limits: {nvidia.com/gpu: "1"}}}
+nvml:
+  frames:
+    - devices:
+        - uuid: GPU-00000000-0000-0000-0000-000000000005
+          name: NVIDIA T1000
+          memory_total: 4294967296
+          compute:
+            - {pid: 101, used_memory: 1073741824}
+            - {pid: 102, used_memory: 1073741824}
+            - {pid: 103, used_memory: 1073741824}
+            - {pid: 104, used_memory: 1073741824}
+            - {pid: 105, used_memory: 1073741824}
+            - {pid: 106, used_memory: 1073741824}
+steps:
+  - kube:
+      create:
+        metadata: {name: r1, namespace: kai-resource-reservation}
+        spec: {containers: [{<<: *gpu1, name: main}]}
+        status: {phase: Running, containerStatuses: [{name: main, containerID: "containerd://${cid:r1}", state: *running}]}
+  - kube:
+      create:
+        metadata: {name: r2, annotations: {run.ai/reserve_for_gpu_index: "0"}}
+        spec: {containers: [{<<: *gpu1, name: main}]}
+        status: {phase: Running, containerStatuses: [{name: main, containerID: "containerd://${cid:r2}", state: *running}]}
+  - kube:
+      create:
+        metadata: {name: r3, annotations: {run.ai/reserve_for_gpu_index: "0", gpu-fraction: "0.5"}}
+        spec: {containers: [{name: main}]}
+        status: {phase: Running, containerStatuses: [{name: main, containerID: "containerd://${cid:r3}", state: *running}]}
+  - kube:
+      create:
+        metadata: {name: r4, namespace: kai-resource-reservation, annotations: {gpu-fraction: "0.25"}}
+        spec: {containers: [{name: main}]}
+        status: {phase: Running, containerStatuses: [{name: main, containerID: "containerd://${cid:r4}", state: *running}]}
+  - kube:
+      create:
+        metadata: {name: r5, annotations: {run.ai/reserve_for_gpu_index: " "}}
+        spec: {containers: [{<<: *gpu1, name: main}]}
+        status: {phase: Running, containerStatuses: [{name: main, containerID: "containerd://${cid:r5}", state: *running}]}
+  - kube:
+      create:
+        metadata: {name: both, annotations: {gpu-fraction: "0.5"}}
+        spec: {containers: [{<<: *gpu1, name: main}]}
+        status: {phase: Running, containerStatuses: [{name: main, containerID: "containerd://${cid:both}", state: *running}]}
+  - proc: {pid: 101, pod: kai-resource-reservation/r1, cid: r1}
+  - proc: {pid: 102, pod: r2, cid: r2}
+  - proc: {pid: 103, pod: r3, cid: r3}
+  - proc: {pid: 104, pod: kai-resource-reservation/r4, cid: r4}
+  - proc: {pid: 105, pod: r5, cid: r5}
+  - proc: {pid: 106, pod: both, cid: both}
+  - check:
+      name: reservation
+      non_empty: [kubex_gpu_container_requests, kubex_gpu_container_memory_bytes]
+      values:
+        kubex_gpu_container_requests{pod="r3",gpu_allocation_type="KaiScheduler"}: 0.5
+        kubex_gpu_container_requests{pod="r4",gpu_allocation_type="KaiScheduler"}: 0.25
+        kubex_gpu_container_requests{pod="r5",gpu_allocation_type="K8sResource"}: 1
+        kubex_gpu_container_requests{pod="both",gpu_allocation_type="KaiScheduler"}: 0.5
+      absent:
+        - kubex_gpu_container_memory_bytes{pod="r1"}
+        - kubex_gpu_container_memory_bytes{pod="r2"}
+        - kubex_gpu_container_requests{pod="both",gpu_allocation_type="K8sResource"}

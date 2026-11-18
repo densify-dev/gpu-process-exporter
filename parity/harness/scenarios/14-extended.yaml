@@ -1,0 +1,49 @@
+description: >-
+  Encoder and decoder utilization from the legacy API, and OFA/JPG samples from the extended API. Go calls
+  nvmlDeviceGetProcessesUtilizationInfo once with a null array, which the driver answers with
+  INSUFFICIENT_SIZE, so Go never reports OFA or JPG. Rust sizes the array first and reports them
+  (parity/CONTRACT.md, accepted deviations).
+definitions:
+  gpu: &gpu {uuid: GPU-00000000-0000-0000-0000-000000000014, name: NVIDIA T1000, memory_total: 4294967296}
+  mem: &mem [{pid: 101, used_memory: 1073741824}]
+nvml:
+  frames:
+    - devices: [{<<: *gpu, compute: *mem}]
+    - devices:
+        - <<: *gpu
+          compute: *mem
+          samples: [{pid: 101, ts: 1000000, sm: 10, mem: 5, enc: 30, dec: 40}]
+          extended_samples: [{pid: 101, ts: 1000000, sm: 10, mem: 5, enc: 30, dec: 40, ofa: 20, jpg: 10}]
+    - devices:
+        - <<: *gpu
+          compute: *mem
+          samples: [{pid: 101, ts: 1100000, enc: 10}]
+          extended_samples: [{pid: 101, ts: 1100000, enc: 10, ofa: 50, jpg: 60}]
+steps:
+  - kube:
+      create:
+        metadata: {name: p1}
+        spec: {containers: [{name: c1, resources: {limits: {nvidia.com/gpu: "1"}}}]}
+        status: {phase: Running, containerStatuses: [{name: c1, containerID: "containerd://${cid:c1}", state: {running: {}}}]}
+  - proc: {pid: 101, pod: p1, cid: c1}
+  - check: {name: mapped, non_empty: [kubex_gpu_container_memory_bytes]}
+  - frame: 1
+  - check:
+      name: first
+      non_empty: [kubex_gpu_container_enc_utilization_percent_seconds_total, kubex_gpu_container_dec_utilization_percent_seconds_total]
+      values:
+        kubex_gpu_container_enc_utilization_percent_seconds_total{pod="p1"}: 6
+        kubex_gpu_container_dec_utilization_percent_seconds_total{pod="p1"}: 8
+      rust_values:
+        kubex_gpu_container_ofa_utilization_percent_seconds_total{pod="p1"}: 4
+        kubex_gpu_container_jpg_utilization_percent_seconds_total{pod="p1"}: 2
+  - frame: 2
+  - check:
+      name: second
+      non_empty: [kubex_gpu_container_enc_utilization_percent_seconds_total]
+      values:
+        kubex_gpu_container_enc_utilization_percent_seconds_total{pod="p1"}: 7
+        kubex_gpu_container_dec_utilization_percent_seconds_total{pod="p1"}: 8
+      rust_values:
+        kubex_gpu_container_ofa_utilization_percent_seconds_total{pod="p1"}: 9
+        kubex_gpu_container_jpg_utilization_percent_seconds_total{pod="p1"}: 8

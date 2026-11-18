@@ -1,0 +1,1 @@
+0::/kubelet.slice/kubelet-kubepods.slice/kubelet-kubepods-besteffort.slice/kubelet-kubepods-besteffort-pod09fe308b_db3c_43cc_9f62_53c828783e9a.slice/cri-containerd-dcd72fe00f8979a60a25ca52e352548fd092b45255167bb8337037628e082849.scope

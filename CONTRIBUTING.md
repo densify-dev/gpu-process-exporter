@@ -4,9 +4,10 @@ Thanks for taking the time to contribute.
 
 ## Setup
 
+Install [rustup](https://rustup.rs/); `rust-toolchain.toml` selects the toolchain.
+
 ```bash
-go mod download
-go test ./...
+cargo test --workspace
 ```
 
 ## Formatting and tests
@@ -14,12 +15,12 @@ go test ./...
 Before opening a pull request, run:
 
 ```bash
-gofmt -w cmd pkg
-go test ./...
-go test -race ./...
-go build ./...
-make lint
+cargo fmt --all
+make test
 ```
+
+When a change touches observable behavior (`/metrics`, HTTP, or exit status), also run `make parity` and update
+[`parity/CONTRACT.md`](parity/CONTRACT.md) for intended differences.
 
 ## Pull requests
 

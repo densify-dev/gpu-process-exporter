@@ -1,0 +1,74 @@
+description: >-
+  PID reuse (new inode) remaps the PID. A crio cgroup v1 file maps. A non-container PID, a malformed cgroup, a
+  cgroup with two container IDs, and a PID without a /proc entry are ignored.
+definitions:
+  gpu: &gpu {uuid: GPU-00000000-0000-0000-0000-000000000010, name: NVIDIA T1000, memory_total: 4294967296}
+  others: &others
+    - {pid: 900, used_memory: 1073741824}
+    - {pid: 901, used_memory: 1073741824}
+    - {pid: 902, used_memory: 1073741824}
+    - {pid: 903, used_memory: 1073741824}
+    - {pid: 904, used_memory: 536870912}
+nvml:
+  frames:
+    - devices: [{<<: *gpu, compute: [{pid: 101, used_memory: 1073741824}], graphics: *others}]
+    - devices:
+        - <<: *gpu
+          compute: [{pid: 101, used_memory: 1073741824}]
+          graphics: *others
+          samples: [{pid: 101, ts: 1000000, sm: 50}, {pid: 904, ts: 1000000, sm: 10}, {pid: 900, ts: 1000000, sm: 90}]
+    - devices:
+        - <<: *gpu
+          compute: [{pid: 101, used_memory: 536870912}]
+          graphics: *others
+          samples: [{pid: 101, ts: 1200000, sm: 30}]
+steps:
+  - kube:
+      create:
+        metadata: {name: p1}
+        spec:
+          containers:
+            - {name: c1, resources: {limits: {nvidia.com/gpu: "1"}}}
+            - {name: c2, resources: {limits: {nvidia.com/gpu: "1"}}}
+        status:
+          phase: Running
+          containerStatuses:
+            - {name: c1, containerID: "containerd://${cid:c1}", state: {running: {}}}
+            - {name: c2, containerID: "cri-o://${cid:c2}", state: {running: {}}}
+  - proc: {pid: 101, pod: p1, cid: c1}
+  - proc: {pid: 900, cgroup: "0::/system.slice/containerd.service\n"}
+  - proc: {pid: 901, cgroup: "garbage\n"}
+  - proc:
+      pid: 902
+      cgroup: |
+        0::/kubepods.slice/kubepods-pod${puid:p1}.slice/cri-containerd-${cid:c1}.scope
+        1:memory:/kubepods.slice/kubepods-pod${puid:p1}.slice/cri-containerd-${cid:c2}.scope
+  - proc:
+      pid: 904
+      cgroup: |
+        12:memory:/kubepods.slice/kubepods-burstable.slice/kubepods-burstable-pod${puid:p1}.slice/crio-${cid:c2}.scope
+        11:cpu,cpuacct:/kubepods.slice/kubepods-burstable.slice/kubepods-burstable-pod${puid:p1}.slice/crio-${cid:c2}.scope
+        1:name=systemd:/kubepods.slice/kubepods-burstable.slice/kubepods-burstable-pod${puid:p1}.slice/crio-${cid:c2}.scope
+  - check:
+      name: mapped
+      non_empty: [kubex_gpu_container_memory_bytes]
+      values:
+        kubex_gpu_container_memory_bytes{container="c1"}: 1073741824
+        kubex_gpu_container_memory_bytes{container="c2"}: 536870912
+  - frame: 1
+  - check:
+      name: samples
+      non_empty: [kubex_gpu_container_sm_utilization_percent_seconds_total]
+      values:
+        kubex_gpu_container_sm_utilization_percent_seconds_total{container="c1"}: 10
+        kubex_gpu_container_sm_utilization_percent_seconds_total{container="c2"}: 2
+  - proc: {pid: 101, pod: p1, cid: c2, recreate: true}
+  - frame: 2
+  - check:
+      name: reused
+      non_empty: [kubex_gpu_container_sm_utilization_percent_seconds_total]
+      values:
+        kubex_gpu_container_sm_utilization_percent_seconds_total{container="c1"}: 10
+        kubex_gpu_container_sm_utilization_percent_seconds_total{container="c2"}: 8
+        kubex_gpu_container_memory_bytes{container="c1"}: 1073741824
+        kubex_gpu_container_memory_bytes{container="c2"}: 536870912

@@ -3,7 +3,7 @@
 set -euo pipefail
 
 TARGET_IMAGE="${TARGET_IMAGE:-debian:trixie-slim}"
-BUILD_IMAGE="${BUILD_IMAGE:-golang:1.27-trixie}"
+BUILD_IMAGE="${BUILD_IMAGE:-rust:1.100.0-trixie}"
 DOCKERHUB_REPO="${DOCKERHUB_REPO:-densify/gpu-process-exporter}"
 DOCKERHUB_TAG="${DOCKERHUB_TAG:-}"
 PUSH_IMAGE="${PUSH_IMAGE:-false}"
@@ -13,6 +13,7 @@ PLATFORMS="${PLATFORMS:-linux/amd64,linux/arm64}"
 SOURCE_URL="${SOURCE_URL:-https://github.com/densify-dev/gpu-process-exporter}"
 CREATED="${CREATED:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}"
 REVISION="${REVISION:-$(git rev-parse HEAD 2>/dev/null || echo unknown)}"
+BRANCH="${BRANCH:-$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)}"
 VERSION="${VERSION:-${DOCKERHUB_TAG:-dev}}"
 if [ "${DOCKERHUB_TAG}" = "v" ]; then
     echo "Refusing empty Docker Hub tag after removing v prefix." >&2
@@ -69,6 +70,7 @@ buildArgs=(
     --build-arg "BUILDIMAGE=${BUILD_IMAGE}"
     --build-arg "VERSION=${VERSION}"
     --build-arg "REVISION=${REVISION}"
+    --build-arg "BRANCH=${BRANCH}"
     --build-arg "CREATED=${CREATED}"
     --build-arg "SOURCE_URL=${SOURCE_URL}"
     -t "${image}"

@@ -1,0 +1,67 @@
+description: >-
+  Protected memory is absent while 0, appears on the first positive value, then follows zeros. Finishing a
+  container that never had it creates it at 0, and memory is not written back afterwards.
+definitions:
+  gpu: &gpu {uuid: GPU-00000000-0000-0000-0000-000000000013, name: NVIDIA T1000, memory_total: 4294967296}
+  mem: &mem [{pid: 101, used_memory: 1073741824}, {pid: 201, used_memory: 1073741824}]
+nvml:
+  frames:
+    - devices: [{<<: *gpu, compute: *mem, details: [{pid: 101, used_memory: 1073741824, protected_memory: 0}]}]
+    - devices: [{<<: *gpu, compute: *mem, details: [{pid: 101, used_memory: 1073741824, protected_memory: 1048576}]}]
+    - devices: [{<<: *gpu, compute: *mem, details: [{pid: 101, used_memory: 1073741824, protected_memory: 0}]}]
+    - devices: [{<<: *gpu, compute: [{pid: 101, used_memory: 1073741824}, {pid: 201, used_memory: 2147483648}]}]
+steps:
+  - kube:
+      create:
+        metadata: {name: p1}
+        spec:
+          containers:
+            - {name: c1, resources: {limits: {nvidia.com/gpu: "1"}}}
+            - {name: c2, resources: {limits: {nvidia.com/gpu: "1"}}}
+        status:
+          phase: Running
+          containerStatuses:
+            - {name: c1, containerID: "containerd://${cid:c1}", state: {running: {}}}
+            - {name: c2, containerID: "containerd://${cid:c2}", state: {running: {}}}
+  - proc: {pid: 101, pod: p1, cid: c1}
+  - proc: {pid: 201, pod: p1, cid: c2}
+  - check:
+      name: zero-absent
+      non_empty: [kubex_gpu_container_memory_bytes]
+      absent: [kubex_gpu_container_protected_memory_bytes]
+  - frame: 1
+  - check:
+      name: positive
+      non_empty: [kubex_gpu_container_protected_memory_bytes]
+      values:
+        kubex_gpu_container_protected_memory_bytes{container="c1"}: 1048576
+      absent: ['kubex_gpu_container_protected_memory_bytes{container="c2"}']
+  - frame: 2
+  - check:
+      name: follows-zero
+      non_empty: [kubex_gpu_container_protected_memory_bytes]
+      values:
+        kubex_gpu_container_protected_memory_bytes{container="c1"}: 0
+  - kube:
+      status:
+        pod: p1
+        status:
+          containerStatuses:
+            - {name: c1, containerID: "containerd://${cid:c1}", state: {running: {}}}
+            - name: c2
+              containerID: "containerd://${cid:c2}"
+              state: {terminated: {containerID: "containerd://${cid:c2}", exitCode: 0, finishedAt: "${now+5s}"}}
+  - check:
+      name: finish-creates
+      non_empty: [kubex_gpu_container_protected_memory_bytes]
+      values:
+        kubex_gpu_container_protected_memory_bytes{container="c2"}: 0
+        kubex_gpu_container_memory_bytes{container="c2"}: 0
+  - frame: 3
+  - check:
+      name: not-written-back
+      non_empty: [kubex_gpu_container_protected_memory_bytes]
+      values:
+        kubex_gpu_container_memory_bytes{container="c2"}: 0
+        kubex_gpu_container_memory_footprint_percent{container="c2"}: 0
+        kubex_gpu_container_protected_memory_bytes{container="c1"}: 0

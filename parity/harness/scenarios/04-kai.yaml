@@ -1,0 +1,121 @@
+description: >-
+  KAI fraction, KAI memory with num-devices, explicit container names (main, blank, unknown), a sidecar init
+  container (restartPolicy Always) and a plain init container (skipped), and Go number syntax in annotations
+  (hex float accepted, a leading "+" on an unsigned value rejected, NaN passed through).
+definitions:
+  running: &running {running: {}}
+nvml:
+  frames:
+    - devices:
+        - uuid: GPU-00000000-0000-0000-0000-000000000004
+          name: NVIDIA T1000
+          memory_total: 4294967296
+          compute:
+            - {pid: 101, used_memory: 1073741824}
+            - {pid: 102, used_memory: 1073741824}
+            - {pid: 103, used_memory: 1073741824}
+            - {pid: 113, used_memory: 1073741824}
+            - {pid: 104, used_memory: 1073741824}
+            - {pid: 105, used_memory: 1073741824}
+            - {pid: 106, used_memory: 1073741824}
+            - {pid: 107, used_memory: 1073741824}
+            - {pid: 108, used_memory: 1073741824}
+            - {pid: 109, used_memory: 1073741824}
+            - {pid: 110, used_memory: 1073741824}
+steps:
+  - kube:
+      create:
+        metadata: {name: k1, annotations: {gpu-fraction: "0.5"}}
+        spec: {containers: [{name: main}]}
+        status: {phase: Running, containerStatuses: [{name: main, containerID: "containerd://${cid:k1}", state: *running}]}
+  - kube:
+      create:
+        metadata: {name: k2, annotations: {gpu-memory: "1024", gpu-fraction-num-devices: "2"}}
+        spec: {containers: [{name: main}]}
+        status: {phase: Running, containerStatuses: [{name: main, containerID: "containerd://${cid:k2}", state: *running}]}
+  - kube:
+      create:
+        metadata: {name: k3, annotations: {gpu-fraction: "0.25", gpu-fraction-container-name: worker}}
+        spec: {containers: [{name: sidecar}, {name: worker}]}
+        status:
+          phase: Running
+          containerStatuses:
+            - {name: sidecar, containerID: "containerd://${cid:k3-sidecar}", state: *running}
+            - {name: worker, containerID: "containerd://${cid:k3}", state: *running}
+  - kube:
+      create:
+        metadata: {name: k4, annotations: {gpu-fraction: "0.5", gpu-fraction-container-name: proxy}}
+        spec: {initContainers: [{name: proxy, restartPolicy: Always}], containers: [{name: main}]}
+        status:
+          phase: Running
+          initContainerStatuses: [{name: proxy, containerID: "containerd://${cid:k4}", state: *running}]
+          containerStatuses: [{name: main, containerID: "containerd://${cid:k4-main}", state: *running}]
+  - kube:
+      create:
+        metadata: {name: k5, annotations: {gpu-fraction: "0.5", gpu-fraction-container-name: setup}}
+        spec: {initContainers: [{name: setup}], containers: [{name: main}]}
+        status:
+          phase: Running
+          initContainerStatuses: [{name: setup, containerID: "containerd://${cid:k5}", state: *running}]
+          containerStatuses: [{name: main, containerID: "containerd://${cid:k5-main}", state: *running}]
+  - kube:
+      create:
+        metadata: {name: k6, annotations: {gpu-fraction: "0x1p-2"}}
+        spec: {containers: [{name: main}]}
+        status: {phase: Running, containerStatuses: [{name: main, containerID: "containerd://${cid:k6}", state: *running}]}
+  - kube:
+      create:
+        metadata: {name: k7, annotations: {gpu-memory: "+1024", gpu-fraction-num-devices: "2"}}
+        spec: {containers: [{name: main}]}
+        status: {phase: Running, containerStatuses: [{name: main, containerID: "containerd://${cid:k7}", state: *running}]}
+  - kube:
+      create:
+        metadata: {name: k8, annotations: {gpu-fraction: " NaN "}}
+        spec: {containers: [{name: main}]}
+        status: {phase: Running, containerStatuses: [{name: main, containerID: "containerd://${cid:k8}", state: *running}]}
+  - kube:
+      create:
+        metadata: {name: k9, annotations: {gpu-fraction: "0.5", gpu-fraction-container-name: "  "}}
+        spec: {containers: [{name: first}, {name: second}]}
+        status:
+          phase: Running
+          containerStatuses:
+            - {name: first, containerID: "containerd://${cid:k9}", state: *running}
+            - {name: second, containerID: "containerd://${cid:k9-second}", state: *running}
+  - kube:
+      create:
+        metadata: {name: k10, annotations: {gpu-fraction: "0.5", gpu-fraction-container-name: nope}}
+        spec: {containers: [{name: main}]}
+        status: {phase: Running, containerStatuses: [{name: main, containerID: "containerd://${cid:k10}", state: *running}]}
+  - proc: {pid: 101, pod: k1, cid: k1}
+  - proc: {pid: 102, pod: k2, cid: k2}
+  - proc: {pid: 103, pod: k3, cid: k3}
+  - proc: {pid: 113, pod: k3, cid: k3-sidecar}
+  - proc: {pid: 104, pod: k4, cid: k4}
+  - proc: {pid: 105, pod: k5, cid: k5}
+  - proc: {pid: 106, pod: k6, cid: k6}
+  - proc: {pid: 107, pod: k7, cid: k7}
+  - proc: {pid: 108, pod: k8, cid: k8}
+  - proc: {pid: 109, pod: k9, cid: k9}
+  - proc: {pid: 110, pod: k10, cid: k10}
+  - check:
+      name: kai
+      non_empty: [kubex_gpu_container_requests, kubex_gpu_container_limits, kubex_gpu_container_memory_bytes]
+      values:
+        kubex_gpu_container_requests{pod="k1",gpu_allocation_type="KaiScheduler"}: 0.5
+        kubex_gpu_container_memory_total_bytes{pod="k1"}: 2147483648
+        kubex_gpu_container_memory_footprint_percent{pod="k1"}: 50
+        kubex_gpu_container_limits{pod="k2"}: 0.5
+        kubex_gpu_container_memory_total_bytes{pod="k2"}: 1073741824
+        kubex_gpu_container_requests{pod="k3",container="worker"}: 0.25
+        kubex_gpu_container_requests{pod="k4",container="proxy"}: 0.5
+        kubex_gpu_container_requests{pod="k6"}: 0.25
+        kubex_gpu_container_memory_total_bytes{pod="k7",gpu_allocation_type="KaiScheduler"}: 4294967296
+        kubex_gpu_container_requests{pod="k8"}: .nan
+        kubex_gpu_container_memory_footprint_percent{pod="k8"}: .nan
+        kubex_gpu_container_requests{pod="k9",container="first"}: 0.5
+      absent:
+        - kubex_gpu_container_memory_bytes{container="sidecar"}
+        - kubex_gpu_container_memory_bytes{pod="k5"}
+        - kubex_gpu_container_requests{pod="k7"}
+        - kubex_gpu_container_memory_bytes{pod="k10"}

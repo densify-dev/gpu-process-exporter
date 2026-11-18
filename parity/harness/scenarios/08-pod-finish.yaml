@@ -1,0 +1,60 @@
+description: >-
+  A pod deleted with grace 0, a pod deleted with grace 300 (deletionTimestamp, no kubelet), and a pod in phase
+  Succeeded. Desired containers only finish on terminal evidence; once no longer desired they finish at the
+  deletionTimestamp or, for a terminal phase, now.
+definitions:
+  running: &running {running: {}}
+nvml:
+  frames:
+    - devices:
+        - uuid: GPU-00000000-0000-0000-0000-000000000008
+          name: NVIDIA T1000
+          memory_total: 4294967296
+          compute: [{pid: 101, used_memory: 1073741824}, {pid: 201, used_memory: 1073741824}, {pid: 301, used_memory: 1073741824}]
+steps:
+  - kube:
+      create:
+        metadata: {name: p1}
+        spec: {containers: [{name: main, resources: {limits: {nvidia.com/gpu: "1"}}}]}
+        status: {phase: Running, containerStatuses: [{name: main, containerID: "containerd://${cid:p1}", state: *running}]}
+  - kube:
+      create:
+        metadata: {name: p2}
+        spec: {containers: [{name: main, resources: {limits: {nvidia.com/gpu: "1"}}}]}
+        status: {phase: Running, containerStatuses: [{name: main, containerID: "containerd://${cid:p2}", state: *running}]}
+  - kube:
+      create:
+        metadata: {name: p3}
+        spec: {containers: [{name: main, resources: {limits: {nvidia.com/gpu: "1"}}}]}
+        status: {phase: Running, containerStatuses: [{name: main, containerID: "containerd://${cid:p3}", state: *running}]}
+  - proc: {pid: 101, pod: p1, cid: p1}
+  - proc: {pid: 201, pod: p2, cid: p2}
+  - proc: {pid: 301, pod: p3, cid: p3}
+  - check: {name: mapped, non_empty: [kubex_gpu_container_memory_bytes]}
+  - kube: {delete: {pod: p1, grace: 0}}
+  - kube: {delete: {pod: p2, grace: 300}}
+  - kube: {status: {pod: p3, status: {phase: Succeeded, containerStatuses: []}}}
+  - check:
+      name: finishing
+      non_empty: [kubex_gpu_container_memory_bytes]
+      values:
+        kubex_gpu_container_memory_bytes{pod="p2"}: 1073741824
+        kubex_gpu_container_memory_bytes{pod="p3"}: 0
+  - kube: {status: {pod: p2, status: {containerStatuses: []}}}
+  - check:
+      name: deletion-timestamp
+      non_empty: [kubex_gpu_container_memory_bytes]
+      values:
+        kubex_gpu_container_memory_bytes{pod="p2"}: 0
+        kubex_gpu_container_protected_memory_bytes{pod="p2"}: 0
+  - check:
+      name: removed
+      timeout: 15s
+      non_empty: [kubex_gpu_container_memory_bytes]
+      values:
+        kubex_gpu_container_memory_bytes{pod="p2"}: 0
+      absent:
+        - kubex_gpu_container_memory_bytes{pod="p1"}
+        - kubex_gpu_container_memory_total_bytes{pod="p1"}
+        - kubex_gpu_container_memory_bytes{pod="p3"}
+        - kubex_gpu_container_requests{pod="p3"}
