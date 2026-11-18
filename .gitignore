@@ -5,7 +5,7 @@
 *~
 __pycache__/
 
-bin
+/bin/
 prompt
 *.out
 go.work
