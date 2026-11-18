@@ -35,7 +35,17 @@ fn main() -> ExitCode {
 /// NVML collector concurrently. The first one to stop cancels the other; its error is the result.
 async fn run() -> anyhow::Result<()> {
     let cancel = CancellationToken::new();
-    tokio::spawn(cancel_on_signal(cancel.clone()));
+    // Register the handlers before anything else, so an early SIGTERM is handled like a later one.
+    let mut sigint = signal(SignalKind::interrupt())?;
+    let mut sigterm = signal(SignalKind::terminate())?;
+    let on_signal = cancel.clone();
+    tokio::spawn(async move {
+        tokio::select! {
+            _ = sigint.recv() => {}
+            _ = sigterm.recv() => {}
+        }
+        on_signal.cancel();
+    });
 
     let cfg = Config::load(&value::EnvProvider).map_err(anyhow::Error::msg)?;
     let registry = Registry::new();
@@ -60,14 +70,4 @@ async fn run() -> anyhow::Result<()> {
     cancel.cancel();
     let other = other.await;
     first?.and(other?)
-}
-
-async fn cancel_on_signal(cancel: CancellationToken) {
-    let mut sigint = signal(SignalKind::interrupt()).expect("install SIGINT handler");
-    let mut sigterm = signal(SignalKind::terminate()).expect("install SIGTERM handler");
-    tokio::select! {
-        _ = sigint.recv() => {}
-        _ = sigterm.recv() => {}
-    }
-    cancel.cancel();
 }

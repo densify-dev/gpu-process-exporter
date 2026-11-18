@@ -96,6 +96,9 @@ The 18 `kubex_gpu_container_*` families with the names, types, HELP strings, and
 - The protobuf text formats (`encoding=text`, `encoding=compact-text`) are not offered; such requests get the
   text format. Prometheus never asks for them.
 - Non-canonical paths (`//`, `.`, `..`) get 404 instead of Go `ServeMux`'s redirect to the cleaned path.
+- Process lists use only the `_v3` NVML calls (R510+); go-nvml falls back to v2 and v1. Go also calls
+  R550 symbols (`nvmlDeviceGetProcessesUtilizationInfo`, `nvmlDeviceGetRunningProcessDetailList`) without a
+  lookup, so the supported driver range does not shrink. Rust skips calls whose symbol is missing.
 
 ## Known Go behaviors preserved
 
