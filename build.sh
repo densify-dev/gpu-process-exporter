@@ -9,7 +9,7 @@ TARGETARCHES="${TARGETARCHES:-amd64 arm64}"
 export VERSION="${VERSION:-$(git describe --tags --always --dirty 2>/dev/null || echo dev)}"
 export REVISION="${REVISION:-$(git rev-parse HEAD 2>/dev/null || echo unknown)}"
 export BRANCH="${BRANCH:-$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)}"
-# Keep build machine paths out of the binary, like go build -trimpath.
+# Keep build machine paths out of the binary (`trim-paths` is not stable yet).
 export RUSTFLAGS="--remap-path-prefix=${PWD}=. --remap-path-prefix=${CARGO_HOME:-${HOME}/.cargo}=cargo ${RUSTFLAGS:-}"
 
 case "$(uname -m)" in
