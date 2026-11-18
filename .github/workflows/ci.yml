@@ -18,34 +18,23 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-          cache: true
+      - name: Set up Rust
+        run: rustup toolchain install
       - name: Check shell syntax
         run: |
-          for script in build.sh build-docker-image.sh entrypoint.sh .github/scripts/update-helm-chart-tag.sh; do
+          for script in build.sh build-docker-image.sh entrypoint.sh .github/scripts/*.sh parity/*.sh; do
             bash -n "$script"
           done
       - name: Test Helm chart release updates
         run: python3 -B -m unittest discover -s .github/scripts -p 'test_*.py'
-      - name: Check formatting
-        run: test -z "$(gofmt -l cmd pkg)"
-      - name: Lint
+      - name: Lint, advisories, licenses, and test map
         run: make lint
       - name: Unit tests
-        run: CGO_CFLAGS=-Wno-deprecated-declarations go test ./...
-      - name: Race tests
-        run: CGO_CFLAGS=-Wno-deprecated-declarations go test -race ./...
-      - name: Install govulncheck
-        run: go install golang.org/x/vuln/cmd/govulncheck@v1.7.0
-      - name: Vulnerability scan
-        run: $(go env GOPATH)/bin/govulncheck ./...
+        run: cargo test --workspace --locked
       - name: Install Gitleaks
-        run: go install github.com/zricethezav/gitleaks/v8@v8.30.1
+        run: .github/scripts/install-gitleaks.sh
       - name: Secret scan
-        run: $(go env GOPATH)/bin/gitleaks git --redact --verbose --report-format=json --report-path=gitleaks-report.json .
+        run: gitleaks git --redact --verbose --report-format=json --report-path=gitleaks-report.json .
       - name: Build image without pushing
         run: |
           docker build --build-arg TARGETARCH=amd64 \
@@ -61,3 +50,26 @@ jobs:
           ignore-unfixed: true
           exit-code: '1'
           format: table
+
+  parity:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Set up Go for the parity reference
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Set up Rust
+        run: rustup toolchain install
+      - name: Install setup-envtest
+        run: |
+          go install sigs.k8s.io/controller-runtime/tools/setup-envtest@v0.25.3
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - name: Go against Rust, 5 runs
+        run: make parity PARITY_ARGS="--runs 5"
+      - name: Rust against the Go goldens
+        run: parity/run.sh --reference golden --candidate target/debug/gpu-exporter

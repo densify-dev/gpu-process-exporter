@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Fails if a Go `func TestXxx` has no Rust `#[test]` named `xxx` (snake_case), unless listed in
-# parity/test-map-exceptions.txt with a reason.
+# Fails if a Go test in parity/go-tests.txt has no Rust `#[test]` with its snake_case name (TestFooBar ->
+# foo_bar), unless parity/test-map-exceptions.txt lists it with a reason.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
@@ -9,12 +9,13 @@ rust_tests=$(grep -rh -A1 -E '^\s*#\[(tokio::)?test\]' crates/gpu-process-export
 exceptions=$(sed -nE 's/^(Test[A-Za-z0-9]+)\s+#.*/\1/p' parity/test-map-exceptions.txt)
 
 missing=0
-for go_test in $(grep -h '^func Test' pkg/*/*_test.go | sed -E 's/^func (Test[A-Za-z0-9]+).*/\1/'); do
+while read -r go_test; do
   grep -qx "$go_test" <<<"$exceptions" && continue
-  rust_test=$(sed -E 's/^Test//; s/([a-z0-9])([A-Z])/\1_\2/g; s/([A-Z])([A-Z][a-z])/\1_\2/g' <<<"$go_test" | tr 'A-Z' 'a-z')
+  rust_test=$(sed -E 's/^Test//; s/([a-z0-9])([A-Z])/\1_\2/g; s/([A-Z])([A-Z][a-z])/\1_\2/g' <<<"$go_test" |
+    tr '[:upper:]' '[:lower:]')
   if ! grep -qx "$rust_test" <<<"$rust_tests"; then
     echo "missing Rust test $rust_test for $go_test"
     missing=1
   fi
-done
+done < <(grep -v '^#' parity/go-tests.txt)
 exit $missing

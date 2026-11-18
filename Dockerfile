@@ -1,70 +1,49 @@
 # SPDX-License-Identifier: Apache-2.0
 
 ARG TARGETIMAGE=debian:trixie-slim
-ARG BUILDIMAGE=golang:1.27-trixie
+ARG BUILDIMAGE=rust:1.100.0-trixie
 
 FROM --platform=${BUILDPLATFORM} ${BUILDIMAGE} AS build
 
 ARG BUILDARCH
 ARG TARGETARCH
+ARG CARGO_ABOUT_VERSION=0.9.3
 
 RUN export DEBIAN_FRONTEND=noninteractive; \
-    echo "Installing packages: gcc g++ gcc-aarch64-linux-gnu gcc-x86-64-linux-gnu libc6-dev-arm64-cross libc6-dev-amd64-cross" \
+    echo "Installing packages: gcc-aarch64-linux-gnu gcc-x86-64-linux-gnu libc6-dev-arm64-cross libc6-dev-amd64-cross" \
     && apt-get update -qq >/dev/null \
     && apt-get upgrade -qq -y -o=Dpkg::Use-Pty=0 >/dev/null \
     && apt-get install -qq -y -o=Dpkg::Use-Pty=0 --no-install-recommends \
-        gcc \
-        g++ \
         gcc-aarch64-linux-gnu \
         gcc-x86-64-linux-gnu \
         libc6-dev-arm64-cross \
         libc6-dev-amd64-cross >/dev/null \
     && rm -rf /var/lib/apt/lists/*
 
+RUN set -eux; \
+    case "${BUILDARCH:-$(dpkg --print-architecture)}" in \
+        amd64) triple=x86_64-unknown-linux-musl; sha256=3ad1e94ea1e63d69d1961f4fb15ccbbe9575d906111f96d2cb4dce6df48f71b4 ;; \
+        arm64) triple=aarch64-unknown-linux-musl; sha256=eb4d9ff6ebd2518152a8308729431a04b3836e71d2bd5ead7aea69f91a71162e ;; \
+        *) echo "unsupported BUILDARCH=${BUILDARCH}" >&2; exit 1 ;; \
+    esac; \
+    archive="cargo-about-${CARGO_ABOUT_VERSION}-${triple}.tar.gz"; \
+    curl -fsSLo "/tmp/${archive}" "https://github.com/EmbarkStudios/cargo-about/releases/download/${CARGO_ABOUT_VERSION}/${archive}"; \
+    echo "${sha256}  /tmp/${archive}" | sha256sum -c -; \
+    tar -xzf "/tmp/${archive}" -C /usr/local/cargo/bin --strip-components=1 --wildcards '*/cargo-about'; \
+    rm "/tmp/${archive}"
+
 WORKDIR /src/gpu-process-exporter
 COPY . .
 
 ARG VERSION=dev
 ARG REVISION=unknown
+ARG BRANCH=unknown
 
 RUN set -eux; \
-    buildarch="${BUILDARCH:-$(dpkg --print-architecture)}"; \
-    case "${buildarch}" in \
-        x86_64|amd64) buildarch=amd64 ;; \
-        aarch64|arm64) buildarch=arm64 ;; \
-        *) echo "unsupported BUILDARCH=${buildarch}" >&2; exit 1 ;; \
-    esac; \
-    if [ "${TARGETARCH}" = "${buildarch}" ]; then \
-        case "${TARGETARCH}" in \
-            amd64|arm64) cc=gcc ;; \
-            *) echo "unsupported TARGETARCH=${TARGETARCH}" >&2; exit 1 ;; \
-        esac; \
-    else \
-        case "${TARGETARCH}" in \
-            amd64) cc=x86_64-linux-gnu-gcc ;; \
-            arm64) cc=aarch64-linux-gnu-gcc ;; \
-            *) echo "unsupported TARGETARCH=${TARGETARCH}" >&2; exit 1 ;; \
-        esac; \
-    fi; \
-    command -v "${cc}" >/dev/null; \
-    mkdir -p "/out/${TARGETARCH}"; \
-    TRIMPATH="$(realpath ..)"; \
-    GOOS=linux \
-    GOARCH="${TARGETARCH}" \
-    CGO_ENABLED=1 \
-    CGO_CFLAGS="-Wno-deprecated-declarations" \
-    CC="${cc}" \
-    go build -trimpath \
-        -gcflags=-trimpath="${TRIMPATH}" \
-        -asmflags=-trimpath="${TRIMPATH}" \
-        -ldflags="-w -s -X github.com/prometheus/common/version.Version=${VERSION} -X github.com/prometheus/common/version.Revision=${REVISION}" \
-        -o "/out/${TARGETARCH}/gpu-exporter" \
-        cmd/main.go; \
-    go run github.com/google/go-licenses/v2@v2.0.1 save \
-        --ignore github.com/densify-dev/gpu-process-exporter \
-        --save_path /out/third-party-licenses \
-        ./cmd; \
-    test -n "$(find /out/third-party-licenses -type f -print -quit)"
+    OUT_DIR=/out TARGETARCHES="${TARGETARCH}" VERSION="${VERSION}" REVISION="${REVISION}" BRANCH="${BRANCH}" ./build.sh; \
+    mkdir -p /out/third-party-licenses; \
+    cargo about generate --locked -c about.toml -m crates/gpu-process-exporter/Cargo.toml \
+        -o /out/third-party-licenses/THIRD-PARTY-LICENSES.txt about.hbs
 
 FROM ${TARGETIMAGE}
 
