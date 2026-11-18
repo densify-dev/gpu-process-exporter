@@ -84,15 +84,29 @@ Exported metrics:
 
 | Label | Description |
 | --- | --- |
-| `goarch` | Target Go architecture, such as `amd64` or `arm64`. |
-| `goos` | Target Go operating system, such as `linux`. |
-| `goversion` | Go toolchain version used for the build. |
-| `revision` | Commit hash supplied at build time, falling back to Go's recorded VCS revision or `unknown`. |
-| `version` | Version supplied at build time, or empty for plain Go builds. |
-| `branch` | Branch supplied at build time, or empty when unset. |
-| `tags` | Build tags recorded by Go, or `unknown` when unavailable. |
+| `version` | `VERSION` at build time, or the crate version. |
+| `revision` | `REVISION` at build time, falling back to `git rev-parse HEAD` or `unknown`. |
+| `branch` | `BRANCH` at build time, or `unknown`. |
+| `rustversion` | Rust toolchain version used for the build. |
+| `os` | Target operating system, such as `linux`. |
+| `arch` | Target architecture, such as `x86_64` or `aarch64`. |
 
-The metric uses the Prometheus version collector (`collectors/version.NewCollector`) and `github.com/prometheus/common/version`. Version and revision are injected with linker flags into that package. Release images use the same version and revision for the metric and OCI image labels. The metric does not include the standard container or per-device labels.
+`build.rs` reads `VERSION`, `REVISION`, and `BRANCH`. Release images use the same version and revision for the metric and OCI image labels.
+
+### Runtime metrics
+
+The exporter also exposes the standard `process_*` metrics: `process_cpu_seconds_total`, `process_open_fds`, `process_max_fds`, `process_virtual_memory_bytes`, `process_resident_memory_bytes`, `process_start_time_seconds`, and `process_threads`.
+
+### Upgrading from 1.x
+
+`v2.0.0` is a Rust rewrite with the same configuration, mounts, ports, and `kubex_gpu_container_*` metrics. It changes:
+
+- The build information labels, as listed above. 1.x used `goarch`, `goos`, `goversion`, and `tags`.
+- `go_*` and `promhttp_*` metrics are gone, and `process_network_*` and `process_virtual_memory_max_bytes` are no longer exposed.
+- `kubex_gpu_container_ofa_utilization_percent_seconds_total` and `kubex_gpu_container_jpg_utilization_percent_seconds_total` now report data on GPUs that support them. 1.x never did.
+- `EXPORTER_ENDPOINT` must start with `/`.
+
+[`parity/CONTRACT.md`](parity/CONTRACT.md) lists every difference. The [parity harness](parity/README.md) checks the rest against the 1.x behavior. Live validation ran on a Turing GPU (T1000) with containerd.
 
 ## Grafana dashboard
 
@@ -109,19 +123,21 @@ The utilization panels use Grafana's `$__rate_interval`. Configure Prometheus se
 
 ## Build and test
 
+`rust-toolchain.toml` pins the Rust toolchain; `rustup` installs it on first use.
+
 ```bash
-go test ./...
-go test -race ./...
-go build ./...
+cargo test --workspace
+make lint      # rustfmt, clippy, cargo-deny, and the Go-to-Rust test map
+make parity    # parity harness against the recorded 1.x outputs
 ```
 
-Build local binaries for amd64 and arm64:
+Build release binaries for amd64 and arm64 (arm64 needs `aarch64-linux-gnu-gcc`):
 
 ```bash
 ./build.sh
 ```
 
-Make targets and `build.sh` default to `git describe --tags --always --dirty` for the version and the full `HEAD` commit hash for the revision. Override these with `VERSION` and `REVISION`. No generation step or Git metadata is required for plain Go builds or tests.
+`build.sh` defaults to `git describe --tags --always --dirty` for the version, the full `HEAD` commit hash for the revision, and the current branch. Override these with `VERSION`, `REVISION`, and `BRANCH`.
 
 Build a container image without pushing:
 

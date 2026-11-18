@@ -21,14 +21,14 @@ enum ReferenceKind {
 
 #[derive(Parser)]
 struct Args {
-    /// Reference implementation: a live Go binary, or the recorded goldens.
-    #[arg(long, value_enum, default_value = "go")]
+    /// Reference implementation: the recorded Go goldens, or a live Go binary built from the reference commit.
+    #[arg(long, value_enum, default_value = "golden")]
     reference: ReferenceKind,
     /// Go reference binary, used with `--reference=go`.
     #[arg(long, default_value = "target/parity/gpu-exporter-go")]
     reference_bin: PathBuf,
     /// Candidate exporter binary.
-    #[arg(long)]
+    #[arg(long, default_value = "target/debug/gpu-exporter")]
     candidate: PathBuf,
     /// Record reference outputs into the golden directory.
     #[arg(long)]

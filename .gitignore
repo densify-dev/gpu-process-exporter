@@ -8,7 +8,6 @@ __pycache__/
 /bin/
 prompt
 *.out
-go.work
 .env
 .env.*
 !.env.example

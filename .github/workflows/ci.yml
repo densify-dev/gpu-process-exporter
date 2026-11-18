@@ -58,18 +58,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - name: Set up Go for the parity reference
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-          cache: true
       - name: Set up Rust
         run: rustup toolchain install
-      - name: Install setup-envtest
-        run: |
-          go install sigs.k8s.io/controller-runtime/tools/setup-envtest@v0.25.3
-          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
-      - name: Go against Rust, 5 runs
+      - name: Rust against the Go goldens, 5 runs
         run: make parity PARITY_ARGS="--runs 5"
-      - name: Rust against the Go goldens
-        run: parity/run.sh --reference golden --candidate target/debug/gpu-exporter

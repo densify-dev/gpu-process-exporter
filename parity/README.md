@@ -4,16 +4,15 @@ Proves that a candidate exporter behaves like the Go reference (`7190ab9`). The 
 [`CONTRACT.md`](CONTRACT.md).
 
 ```bash
-make parity                                   # Go vs Rust
+make parity                                        # Rust against the recorded Go outputs
 make parity PARITY_ARGS="--runs 5 --scenario 07"
-make parity PARITY_CANDIDATE=target/parity/gpu-exporter-go   # Go vs Go
-parity/run.sh --reference golden --candidate target/debug/gpu-exporter   # against recorded Go outputs
-parity/run.sh --candidate target/parity/gpu-exporter-go --record   # re-record goldens
+parity/run.sh --reference go                       # Rust against a live Go build
+parity/run.sh --reference go --candidate target/parity/gpu-exporter-go --record   # re-record goldens
 ```
 
-`run.sh` needs Go, cargo, openssl, and `setup-envtest` on `PATH` (or `KUBEBUILDER_ASSETS`). It builds the Go
-reference from `REFERENCE_COMMIT` and the Rust exporter, both with `VERSION`, `REVISION`, and `BRANCH` (default
-`parity`) so the build info labels compare.
+`run.sh` needs cargo, curl, and openssl. It fetches etcd and kube-apiserver (unless `KUBEBUILDER_ASSETS` is set)
+and builds the Rust exporter with `VERSION`, `REVISION`, and `BRANCH` (default `parity`). `--reference go` also
+builds the Go reference from `REFERENCE_COMMIT`, which needs Go.
 
 ## Pieces
 
@@ -25,6 +24,10 @@ reference from `REFERENCE_COMMIT` and the Rust exporter, both with `VERSION`, `R
 - `harness/scenarios/*.yaml`: steps `start`, `kube` (create, status, patch, delete, restart_apiserver), `proc`,
   `frame`, `sleep`, `check`. Strings expand `${cid:x}`, `${puid:pod}`, `${now+3s}`, `${node}`, `${ns}`.
 - `golden/`: Go outputs per scenario and check, without `go_*`, `promhttp_*`, and `process_*`.
+- `harness/src/bin/live-compare.rs`: scrapes two running exporters every 20s and checks the live criteria
+  (`LIVE-RESULTS.md`).
+- `check-test-map.sh`: every Go test in `go-tests.txt` needs a Rust test of the same snake_case name, or an entry in
+  `test-map-exceptions.txt`.
 
 A check compares both `/metrics` outputs (or HTTP responses, or a stalled-header connection) until equal or its
 timeout (10s), and also asserts its `non_empty` families, `absent` selectors, and hand-computed `values`. `rust_values` are
