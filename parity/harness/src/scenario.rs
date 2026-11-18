@@ -107,6 +107,9 @@ pub struct Check {
     /// Hand-computed values: selector -> value (exactly one matching sample).
     #[serde(default)]
     pub values: BTreeMap<String, f64>,
+    /// Hand-computed values only a Rust candidate must have, for its deliberate fixes of Go.
+    #[serde(default)]
+    pub rust_values: BTreeMap<String, f64>,
     /// HTTP requests compared instead of the metrics endpoint.
     #[serde(default)]
     pub http: Vec<HttpRequest>,

@@ -27,7 +27,9 @@ part of the contract.
   Header read timeout 5s; the connection is then closed without a response.
 - Exact header values: metrics `Content-Type: text/plain; version=0.0.4; charset=utf-8; escaping=underscores`;
   404 `Content-Type: text/plain; charset=utf-8`. Any method and any query string on the endpoint serve
-  metrics.
+  metrics; `name[]` query parameters select families.
+- Delimited protobuf when the `Accept` header asks for it, following `expfmt.NegotiateAccept`. An explicit
+  `escaping` parameter on the matching clause is echoed in the `Content-Type`.
 
 ## Pod to container rules
 
@@ -87,10 +89,17 @@ The 18 `kubex_gpu_container_*` families with the names, types, HELP strings, and
   `process_network_*`, no `process_virtual_memory_max_bytes`).
 - `EXPORTER_ENDPOINT` must start with `/`; other values fail at startup.
 - Float text formatting may differ (`5.8720256e+09` vs `5872025600`); values parse equal.
+- OFA and JPG counters are reported. Go calls `nvmlDeviceGetProcessesUtilizationInfo` once with a null array,
+  which the driver answers with `INSUFFICIENT_SIZE`, so Go never reports them. Rust sizes the array first and
+  passes its own last-seen timestamp. The harness skips these families against Go and checks hand-computed
+  Rust values instead (scenario 14).
+- The protobuf text formats (`encoding=text`, `encoding=compact-text`) are not offered; such requests get the
+  text format. Prometheus never asks for them.
+- Non-canonical paths (`//`, `.`, `..`) get 404 instead of Go `ServeMux`'s redirect to the cleaned path.
 
 ## Known Go behaviors preserved
 
-Found while building the harness. Rust keeps them unless decided otherwise.
+Found while building the harness. Rust keeps them.
 
 - Several PIDs of one container on one device: memory bytes, protected memory, and accounting values are
   last-write-wins in map iteration order, not summed. Only utilization counters sum. Scenarios keep those
@@ -101,12 +110,3 @@ Found while building the harness. Rust keeps them unless decided otherwise.
   its last positive value.
 - A container on several devices caches its calculated values (requests, limits, memory total) from whichever
   device is reported first, in map order. Scenarios use equal device totals.
-
-## Open questions
-
-Rust matches Go on these until decided (plan step 7).
-
-- Likely Go bug: OFA and JPG counters never appear. go-nvml calls `nvmlDeviceGetProcessesUtilizationInfo` once with a null
-  array, which the driver answers with `INSUFFICIENT_SIZE`, so the extended API never returns samples.
-- Go serves the protobuf exposition when asked (`Accept: application/vnd.google.protobuf;...`). Prometheus only
-  asks for it with native histograms enabled. Keep it in the contract, or accept text only as a deviation?

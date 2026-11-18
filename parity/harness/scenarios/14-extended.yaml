@@ -1,7 +1,8 @@
 description: >-
   Encoder and decoder utilization from the legacy API, and OFA/JPG samples from the extended API. Go calls
   nvmlDeviceGetProcessesUtilizationInfo once with a null array, which the driver answers with
-  INSUFFICIENT_SIZE, so Go never reports OFA or JPG (see parity/CONTRACT.md).
+  INSUFFICIENT_SIZE, so Go never reports OFA or JPG. Rust sizes the array first and reports them
+  (parity/CONTRACT.md, accepted deviations).
 definitions:
   gpu: &gpu {uuid: GPU-00000000-0000-0000-0000-000000000014, name: NVIDIA T1000, memory_total: 4294967296}
   mem: &mem [{pid: 101, used_memory: 1073741824}]
@@ -33,6 +34,9 @@ steps:
       values:
         kubex_gpu_container_enc_utilization_percent_seconds_total{pod="p1"}: 6
         kubex_gpu_container_dec_utilization_percent_seconds_total{pod="p1"}: 8
+      rust_values:
+        kubex_gpu_container_ofa_utilization_percent_seconds_total{pod="p1"}: 4
+        kubex_gpu_container_jpg_utilization_percent_seconds_total{pod="p1"}: 2
   - frame: 2
   - check:
       name: second
@@ -40,3 +44,6 @@ steps:
       values:
         kubex_gpu_container_enc_utilization_percent_seconds_total{pod="p1"}: 7
         kubex_gpu_container_dec_utilization_percent_seconds_total{pod="p1"}: 8
+      rust_values:
+        kubex_gpu_container_ofa_utilization_percent_seconds_total{pod="p1"}: 9
+        kubex_gpu_container_jpg_utilization_percent_seconds_total{pod="p1"}: 8

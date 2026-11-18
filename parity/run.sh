@@ -8,6 +8,6 @@ if [ -z "${KUBEBUILDER_ASSETS:-}" ]; then
   KUBEBUILDER_ASSETS=$(setup-envtest use -p path --bin-dir "${ENVTEST_BIN_DIR:-$HOME/.cache/envtest}" "${ENVTEST_K8S_VERSION:-1.36.2}")
   export KUBEBUILDER_ASSETS
 fi
-cargo build -p fake-nvml -p parity-harness
+cargo build -p fake-nvml -p parity-harness -p gpu-process-exporter
 parity/build-reference.sh
 exec target/debug/parity-harness "$@"

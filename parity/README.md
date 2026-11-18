@@ -4,16 +4,16 @@ Proves that a candidate exporter behaves like the Go reference (`7190ab9`). The 
 [`CONTRACT.md`](CONTRACT.md).
 
 ```bash
-make parity                                   # Go vs Go
-make parity PARITY_CANDIDATE=<bin>            # Go vs candidate
-make parity PARITY_CANDIDATE=<bin> PARITY_ARGS="--runs 5 --scenario 07"
-parity/run.sh --reference golden --candidate <bin>   # against recorded Go outputs
+make parity                                   # Go vs Rust
+make parity PARITY_ARGS="--runs 5 --scenario 07"
+make parity PARITY_CANDIDATE=target/parity/gpu-exporter-go   # Go vs Go
+parity/run.sh --reference golden --candidate target/debug/gpu-exporter   # against recorded Go outputs
 parity/run.sh --candidate target/parity/gpu-exporter-go --record   # re-record goldens
 ```
 
-`run.sh` needs Go, cargo, openssl, and `setup-envtest` on `PATH` (or `KUBEBUILDER_ASSETS`). It builds the
-reference from `REFERENCE_COMMIT` with `VERSION`, `REVISION`, and `BRANCH` (default `parity`); build the candidate
-with the same values so the build info labels compare.
+`run.sh` needs Go, cargo, openssl, and `setup-envtest` on `PATH` (or `KUBEBUILDER_ASSETS`). It builds the Go
+reference from `REFERENCE_COMMIT` and the Rust exporter, both with `VERSION`, `REVISION`, and `BRANCH` (default
+`parity`) so the build info labels compare.
 
 ## Pieces
 
@@ -27,4 +27,5 @@ with the same values so the build info labels compare.
 - `golden/`: Go outputs per scenario and check, without `go_*`, `promhttp_*`, and `process_*`.
 
 A check compares both `/metrics` outputs (or HTTP responses, or a stalled-header connection) until equal or its
-timeout (10s), and also asserts its `non_empty` families, `absent` selectors, and hand-computed `values`.
+timeout (10s), and also asserts its `non_empty` families, `absent` selectors, and hand-computed `values`. `rust_values` are
+asserted only on a Rust candidate, for the families Rust deliberately fixes (`CONTRACT.md`).

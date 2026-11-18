@@ -576,8 +576,11 @@ impl Run<'_> {
             Exposition::parse(&candidate)?,
         );
         let mut diffs = compare(&r, &c, golden);
-        diffs.extend(self.expectations(check, &r, "reference")?);
-        diffs.extend(self.expectations(check, &c, "candidate")?);
+        diffs.extend(self.expectations(check, &check.values, &r, "reference")?);
+        diffs.extend(self.expectations(check, &check.values, &c, "candidate")?);
+        if crate::compare::is_rust(&c) {
+            diffs.extend(self.expectations(check, &check.rust_values, &c, "candidate")?);
+        }
         Ok((diffs, vec![(file, strip_ignored(&reference))]))
     }
 
@@ -608,6 +611,7 @@ impl Run<'_> {
                     let expo = Exposition::parse(&resp.body)?;
                     diffs.extend(self.expectations(
                         check,
+                        &check.values,
                         &expo,
                         &format!("{}: {label}", req.name),
                     )?);
@@ -618,7 +622,13 @@ impl Run<'_> {
         Ok((diffs, outputs))
     }
 
-    fn expectations(&self, check: &Check, expo: &Exposition, label: &str) -> Result<Vec<String>> {
+    fn expectations(
+        &self,
+        check: &Check,
+        values: &BTreeMap<String, f64>,
+        expo: &Exposition,
+        label: &str,
+    ) -> Result<Vec<String>> {
         let mut diffs = Vec::new();
         for family in &check.non_empty {
             if expo
@@ -635,7 +645,7 @@ impl Run<'_> {
                 diffs.push(format!("{label}: {sel} should be absent"));
             }
         }
-        for (selector, want) in &check.values {
+        for (selector, want) in values {
             let sel: Selector = self.expand(selector).parse()?;
             match expo.select(&sel).as_slice() {
                 [(_, got)] if crate::compare::values_equal(*want, *got, true) => {}

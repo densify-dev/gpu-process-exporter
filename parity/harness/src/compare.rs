@@ -18,18 +18,27 @@ const SHARED_PROCESS: [&str; 6] = [
 ];
 const RUST_PROCESS: &str = "process_threads";
 const COUNTER_TOLERANCE: f64 = 1e-9;
+/// Families where Rust deliberately fixes Go (CONTRACT.md, accepted deviations). Against a Go reference they are
+/// not diffed; checks assert their Rust values through `rust_values`.
+const FIXED_IN_RUST: [&str; 2] = [
+    "kubex_gpu_container_ofa_utilization_percent_seconds_total",
+    "kubex_gpu_container_jpg_utilization_percent_seconds_total",
+];
 
 /// Returns human-readable differences; empty means equal. `golden` skips build info values, which depend on
 /// the build that recorded the reference.
 pub fn compare(reference: &Exposition, candidate: &Exposition, golden: bool) -> Vec<String> {
     let mut diffs = Vec::new();
+    let rust_vs_go = is_rust(candidate) && !is_rust(reference);
     let names: BTreeSet<&String> = reference
         .families
         .keys()
         .chain(candidate.families.keys())
         .collect();
     for name in names {
-        if IGNORED_PREFIXES.iter().any(|p| name.starts_with(p)) || name.starts_with(PROCESS_PREFIX)
+        if IGNORED_PREFIXES.iter().any(|p| name.starts_with(p))
+            || name.starts_with(PROCESS_PREFIX)
+            || rust_vs_go && FIXED_IN_RUST.contains(&name.as_str())
         {
             continue;
         }
@@ -55,7 +64,7 @@ pub fn compare(reference: &Exposition, candidate: &Exposition, golden: bool) -> 
     diffs
 }
 
-fn is_rust(expo: &Exposition) -> bool {
+pub fn is_rust(expo: &Exposition) -> bool {
     build_labels(expo.families.get(BUILD_INFO)).is_some_and(|l| l.contains_key("rustversion"))
 }
 
