@@ -1,14 +1,13 @@
 //! Differential parity harness: runs a reference and a candidate exporter side by side against fake NVML,
 //! a hermetic kube-apiserver, and a fake `/proc`, and compares what they expose.
-mod compare;
 mod env;
-mod expo;
 mod exporter;
 mod runner;
 mod scenario;
 
 use anyhow::{Context, Result, bail};
 use clap::{Parser, ValueEnum};
+use parity_harness::{compare, expo};
 use runner::{Reference, Settings, Shared};
 use std::path::PathBuf;
 use std::sync::Arc;

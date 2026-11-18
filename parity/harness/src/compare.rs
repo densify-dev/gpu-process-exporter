@@ -25,10 +25,46 @@ const FIXED_IN_RUST: [&str; 2] = [
     "kubex_gpu_container_jpg_utilization_percent_seconds_total",
 ];
 
+/// One difference between two expositions.
+pub enum Diff {
+    /// Families, HELP, TYPE, series sets, or build info.
+    Structure(String),
+    /// A sample present in both with different values.
+    Value {
+        key: (String, Labels),
+        counter: bool,
+        message: String,
+    },
+}
+
+impl std::fmt::Display for Diff {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Diff::Structure(m) | Diff::Value { message: m, .. } => f.write_str(m),
+        }
+    }
+}
+
+#[derive(Default)]
+struct Diffs(Vec<Diff>);
+
+impl Diffs {
+    fn push(&mut self, message: String) {
+        self.0.push(Diff::Structure(message));
+    }
+}
+
 /// Returns human-readable differences; empty means equal. `golden` skips build info values, which depend on
 /// the build that recorded the reference.
 pub fn compare(reference: &Exposition, candidate: &Exposition, golden: bool) -> Vec<String> {
-    let mut diffs = Vec::new();
+    diff(reference, candidate, golden)
+        .iter()
+        .map(ToString::to_string)
+        .collect()
+}
+
+pub fn diff(reference: &Exposition, candidate: &Exposition, golden: bool) -> Vec<Diff> {
+    let mut diffs = Diffs::default();
     let rust_vs_go = is_rust(candidate) && !is_rust(reference);
     let names: BTreeSet<&String> = reference
         .families
@@ -61,7 +97,7 @@ pub fn compare(reference: &Exposition, candidate: &Exposition, golden: bool) -> 
             diffs.push(format!("{name}: missing in candidate"));
         }
     }
-    diffs
+    diffs.0
 }
 
 pub fn is_rust(expo: &Exposition) -> bool {
@@ -72,12 +108,7 @@ fn build_labels(family: Option<&Family>) -> Option<&Labels> {
     family?.samples.keys().next().map(|(_, l)| l)
 }
 
-fn compare_build_info(
-    reference: &Family,
-    candidate: &Family,
-    golden: bool,
-    diffs: &mut Vec<String>,
-) {
+fn compare_build_info(reference: &Family, candidate: &Family, golden: bool, diffs: &mut Diffs) {
     let (Some(r), Some(c)) = (build_labels(Some(reference)), build_labels(Some(candidate))) else {
         diffs.push(format!("{BUILD_INFO}: no sample"));
         return;
@@ -111,7 +142,7 @@ fn compare_build_info(
     }
 }
 
-fn compare_family(name: &str, reference: &Family, candidate: &Family, diffs: &mut Vec<String>) {
+fn compare_family(name: &str, reference: &Family, candidate: &Family, diffs: &mut Diffs) {
     if reference.help != candidate.help {
         diffs.push(format!(
             "{name}: HELP {:?} != {:?}",
@@ -131,12 +162,11 @@ fn compare_family(name: &str, reference: &Family, candidate: &Family, diffs: &mu
                 "{}{:?}: missing in candidate (reference {r})",
                 key.0, key.1
             )),
-            Some(c) if !values_equal(*r, *c, counter) => {
-                diffs.push(format!(
-                    "{}{:?}: reference {r} != candidate {c}",
-                    key.0, key.1
-                ));
-            }
+            Some(c) if !values_equal(*r, *c, counter) => diffs.0.push(Diff::Value {
+                key: key.clone(),
+                counter,
+                message: format!("{}{:?}: reference {r} != candidate {c}", key.0, key.1),
+            }),
             Some(_) => {}
         }
     }
