@@ -221,18 +221,14 @@ func (gc *GpuContainer) calculate(devInfo *DeviceInfo) (requests, limits, totalM
 		}
 		// KAI schedules whole MiB rounded down; fractiond enforces whole MiB rounded up.
 		requests = float64(requestBytes/MiB) * MiB / totalMemory
-		limitMiB := limitBytes / MiB
-		if limitBytes%MiB != 0 {
-			limitMiB++
-		}
-		limitMemory := float64(limitMiB) * MiB
+		limitMemory := roundUpMemoryLimitBytes(limitBytes)
 		limits = limitMemory / totalMemory
 		totalMemory = limitMemory
 	} else if gc.GpuMemory != nil {
 		totalMemory = float64(*gc.GpuMemory) * MiB
 		requests = totalMemory / float64(devInfo.TotalMemory)
 		if limit := gc.GpuMemoryLimitBytes; limit != nil && *limit >= MiB && float64(*limit) >= totalMemory {
-			totalMemory = float64(*limit)
+			totalMemory = roundUpMemoryLimitBytes(*limit)
 		}
 		limits = totalMemory / float64(devInfo.TotalMemory)
 	} else {
@@ -244,6 +240,14 @@ func (gc *GpuContainer) calculate(devInfo *DeviceInfo) (requests, limits, totalM
 		limits *= float64(*gc.GPUNumDevices)
 	}
 	return
+}
+
+func roundUpMemoryLimitBytes(bytes uint64) float64 {
+	mib := bytes / MiB
+	if bytes%MiB != 0 {
+		mib++
+	}
+	return float64(mib) * MiB
 }
 
 type GpuContainerMetrics struct {

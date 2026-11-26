@@ -366,6 +366,7 @@ func TestKaiLimits(t *testing.T) {
 	}{
 		{"fraction", "gpu-fraction", "0.25", "gpu-fraction.limit", "0.5"},
 		{"memory", "gpu-memory", "4096", "gpu-memory.limit", testKaiMemoryLimit},
+		{"non-whole-MiB memory limit", KaiMemoryAnnotation, "4096", KaiMemoryLimitAnnotation, "8191.5Mi"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			pod := newIrrelevantPod("kai-limit")
