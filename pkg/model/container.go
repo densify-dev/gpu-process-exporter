@@ -77,21 +77,23 @@ type LabelFingerprint struct {
 
 type GpuContainer struct {
 	*GpuContainerKey
-	NodeName           string
-	Namespace          string
-	PodName            string
-	ContainerName      string
-	GpuAllocationType  GpuAllocationType
-	GpuUuid            string
-	GpuRequest         *int64
-	GpuLimit           *int64
-	GpuFraction        *float64
-	GpuMemory          *uint64
-	GPUNumDevices      *uint64
-	FinishedAt         time.Time
-	calculatedValuesMu sync.Mutex
-	calculatedValues   *CalculatedValues
-	DeviceLabels       map[string]*DeviceModelFingerprint
+	NodeName            string
+	Namespace           string
+	PodName             string
+	ContainerName       string
+	GpuAllocationType   GpuAllocationType
+	GpuUuid             string
+	GpuRequest          *int64
+	GpuLimit            *int64
+	GpuFraction         *float64
+	GpuFractionLimit    *float64
+	GpuMemory           *uint64
+	GpuMemoryLimitBytes *uint64
+	GPUNumDevices       *uint64
+	FinishedAt          time.Time
+	calculatedValuesMu  sync.Mutex
+	calculatedValues    *CalculatedValues
+	DeviceLabels        map[string]*DeviceModelFingerprint
 }
 
 func (gc *GpuContainer) GetCalculatedValues(devInfo *DeviceInfo) *CalculatedValues {
@@ -203,21 +205,28 @@ func (gc *GpuContainer) calculate(devInfo *DeviceInfo) (requests, limits, totalM
 		limits = float64(*gc.GpuLimit)
 		return
 	}
-	var reqLim float64
 	if gc.GpuFraction != nil {
-		reqLim = *gc.GpuFraction
-		totalMemory *= reqLim
+		requests = *gc.GpuFraction
+		limits = requests
+		if limit := gc.GpuFractionLimit; limit != nil && *limit > 0 && *limit >= requests && *limit < 1 {
+			limits = *limit
+		}
+		totalMemory *= limits
 	} else if gc.GpuMemory != nil {
-		totalMemory = float64(*gc.GpuMemory * MiB)
-		reqLim = totalMemory / float64(devInfo.TotalMemory)
+		totalMemory = float64(*gc.GpuMemory) * MiB
+		requests = totalMemory / float64(devInfo.TotalMemory)
+		if limit := gc.GpuMemoryLimitBytes; limit != nil && *limit >= MiB && float64(*limit) >= totalMemory {
+			totalMemory = float64(*limit)
+		}
+		limits = totalMemory / float64(devInfo.TotalMemory)
 	} else {
 		err = fmt.Errorf("no KAI annotations to determine fractional GPU request/limit")
 		return
 	}
 	if gc.GPUNumDevices != nil {
-		reqLim *= float64(*gc.GPUNumDevices)
+		requests *= float64(*gc.GPUNumDevices)
+		limits *= float64(*gc.GPUNumDevices)
 	}
-	requests, limits = reqLim, reqLim
 	return
 }
 

@@ -359,6 +359,48 @@ func TestStoreZeroesCurrentGaugesWhenContainerFinishes(t *testing.T) {
 	}
 }
 
+func TestKaiLimits(t *testing.T) {
+	for _, tt := range []struct {
+		name, requestKey, request, limitKey, limit string
+	}{
+		{"fraction", "gpu-fraction", "0.25", "gpu-fraction.limit", "0.5"},
+		{"memory", "gpu-memory", "4096", "gpu-memory.limit", "8Gi"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			pod := newIrrelevantPod("kai-limit")
+			pod.Annotations = map[string]string{
+				tt.requestKey:           tt.request,
+				tt.limitKey:             tt.limit,
+				KaiNumDevicesAnnotation: "2",
+			}
+			id := normalizeContainerID(pod.Status.ContainerStatuses[0].ContainerID)
+			device := &model.DeviceInfo{TotalMemory: 16384 * model.MiB}
+			container := desiredGpuContainersForPod(pod)[id]
+			if container == nil {
+				t.Fatal("expected GPU container")
+			}
+			want := model.CalculatedValues{Requests: 0.5, Limits: 1, TotalMemory: 8192 * model.MiB}
+			if got := container.GetCalculatedValues(device); got == nil || *got != want {
+				t.Fatalf("with explicit limit: got %+v, want %+v", got, want)
+			}
+
+			delete(pod.Annotations, tt.limitKey)
+			updateGpuContainer(container, desiredGpuContainersForPod(pod)[id])
+			want = model.CalculatedValues{Requests: 0.5, Limits: 0.5, TotalMemory: 4096 * model.MiB}
+			if got := container.GetCalculatedValues(device); got == nil || *got != want {
+				t.Fatalf("after removing limit: got %+v, want %+v", got, want)
+			}
+
+			pod.Annotations[tt.limitKey] = tt.limit
+			updateGpuContainer(container, desiredGpuContainersForPod(pod)[id])
+			want = model.CalculatedValues{Requests: 0.5, Limits: 1, TotalMemory: 8192 * model.MiB}
+			if got := container.GetCalculatedValues(device); got == nil || *got != want {
+				t.Fatalf("after restoring limit: got %+v, want %+v", got, want)
+			}
+		})
+	}
+}
+
 func TestDesiredGpuContainersForPodTracksKaiNumDevices(t *testing.T) {
 	pod := newIrrelevantPod("kai-num-devices")
 	pod.Annotations = map[string]string{

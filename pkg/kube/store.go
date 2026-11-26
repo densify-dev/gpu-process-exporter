@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math"
 	"strings"
 	"sync"
 	"time"
@@ -19,6 +20,7 @@ import (
 	"github.com/densify-dev/gpu-process-exporter/pkg/value"
 	authorizationv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/types"
@@ -36,7 +38,9 @@ const (
 	KaiResourceReservationNamespace  = "kai-resource-reservation"
 	KaiResourceReservationAnnotation = "run.ai/reserve_for_gpu_index"
 	KaiFractionAnnotation            = "gpu-fraction"
+	KaiFractionLimitAnnotation       = "gpu-fraction.limit"
 	KaiMemoryAnnotation              = "gpu-memory"
+	KaiMemoryLimitAnnotation         = "gpu-memory.limit"
 	KaiFractionContainerAnnotation   = "gpu-fraction-container-name"
 	KaiNumDevicesAnnotation          = "gpu-fraction-num-devices"
 	nodeNameKey                      = "spec.nodeName"
@@ -437,9 +441,16 @@ func addKaiContainers(pod *corev1.Pod, desired map[string]*model.GpuContainer) {
 		func(gc *model.GpuContainer) {
 			if hasFraction {
 				gc.GpuFraction = new(fraction)
+				if limit, ok := ParseAnnotation[float64](&pod.ObjectMeta, KaiFractionLimitAnnotation); ok {
+					gc.GpuFractionLimit = new(limit)
+				}
 			}
 			if hasMemory {
 				gc.GpuMemory = new(memory)
+				limit, err := resource.ParseQuantity(pod.Annotations[KaiMemoryLimitAnnotation])
+				if err == nil && limit.Sign() > 0 && limit.CmpInt64(math.MaxInt64) <= 0 {
+					gc.GpuMemoryLimitBytes = new(uint64(limit.Value()))
+				}
 			}
 			if hasNumDevices {
 				gc.GPUNumDevices = new(numDevices)
@@ -530,7 +541,9 @@ func updateGpuContainer(dst, src *model.GpuContainer) {
 	dst.GpuRequest = src.GpuRequest
 	dst.GpuLimit = src.GpuLimit
 	dst.GpuFraction = src.GpuFraction
+	dst.GpuFractionLimit = src.GpuFractionLimit
 	dst.GpuMemory = src.GpuMemory
+	dst.GpuMemoryLimitBytes = src.GpuMemoryLimitBytes
 	dst.GPUNumDevices = src.GPUNumDevices
 	dst.ResetCalculatedValues()
 	if labelsChanged {
