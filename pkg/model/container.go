@@ -77,23 +77,24 @@ type LabelFingerprint struct {
 
 type GpuContainer struct {
 	*GpuContainerKey
-	NodeName            string
-	Namespace           string
-	PodName             string
-	ContainerName       string
-	GpuAllocationType   GpuAllocationType
-	GpuUuid             string
-	GpuRequest          *int64
-	GpuLimit            *int64
-	GpuFraction         *float64
-	GpuFractionLimit    *float64
-	GpuMemory           *uint64
-	GpuMemoryLimitBytes *uint64
-	GPUNumDevices       *uint64
-	FinishedAt          time.Time
-	calculatedValuesMu  sync.Mutex
-	calculatedValues    *CalculatedValues
-	DeviceLabels        map[string]*DeviceModelFingerprint
+	NodeName              string
+	Namespace             string
+	PodName               string
+	ContainerName         string
+	GpuAllocationType     GpuAllocationType
+	GpuUuid               string
+	GpuRequest            *int64
+	GpuLimit              *int64
+	GpuFraction           *float64
+	GpuFractionLimit      *float64
+	GpuMemory             *uint64
+	GpuMemoryRequestBytes *uint64
+	GpuMemoryLimitBytes   *uint64
+	GPUNumDevices         *uint64
+	FinishedAt            time.Time
+	calculatedValuesMu    sync.Mutex
+	calculatedValues      *CalculatedValues
+	DeviceLabels          map[string]*DeviceModelFingerprint
 }
 
 func (gc *GpuContainer) GetCalculatedValues(devInfo *DeviceInfo) *CalculatedValues {
@@ -212,8 +213,12 @@ func (gc *GpuContainer) calculate(devInfo *DeviceInfo) (requests, limits, totalM
 			limits = *limit
 		}
 		totalMemory *= limits
-	} else if gc.GpuMemory != nil {
-		totalMemory = float64(*gc.GpuMemory) * MiB
+	} else if gc.GpuMemoryRequestBytes != nil || gc.GpuMemory != nil {
+		if gc.GpuMemoryRequestBytes != nil {
+			totalMemory = float64(*gc.GpuMemoryRequestBytes)
+		} else {
+			totalMemory = float64(*gc.GpuMemory) * MiB
+		}
 		requests = totalMemory / float64(devInfo.TotalMemory)
 		if limit := gc.GpuMemoryLimitBytes; limit != nil && *limit >= MiB && float64(*limit) >= totalMemory {
 			totalMemory = float64(*limit)

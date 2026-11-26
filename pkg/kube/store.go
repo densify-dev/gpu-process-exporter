@@ -411,15 +411,21 @@ func addK8sContainerIfGPURequested(
 }
 
 func addKaiContainers(pod *corev1.Pod, desired map[string]*model.GpuContainer) {
-	fraction, hasFraction := ParseAnnotation[float64](&pod.ObjectMeta, KaiFractionAnnotation)
-	memory, hasMemory := ParseAnnotation[uint64](&pod.ObjectMeta, KaiMemoryAnnotation)
-	numDevices, hasNumDevices := ParseAnnotation[uint64](&pod.ObjectMeta, KaiNumDevicesAnnotation)
-	if !hasFraction && !hasMemory && !hasNumDevices {
+	container, initContainer, ok := selectKaiContainer(pod)
+	if !ok {
 		return
 	}
 
-	container, initContainer, ok := selectKaiContainer(pod)
-	if !ok {
+	requestKey, limitKey := nvFractionsMemoryKeys(container.Name)
+	requestBytes := parseKaiMemoryBytes(pod.Annotations[requestKey])
+	limitBytes := parseKaiMemoryBytes(pod.Annotations[limitKey])
+	if requestBytes == nil {
+		requestBytes = limitBytes
+	}
+	fraction, hasFraction := ParseAnnotation[float64](&pod.ObjectMeta, KaiFractionAnnotation)
+	memory, hasMemory := ParseAnnotation[uint64](&pod.ObjectMeta, KaiMemoryAnnotation)
+	numDevices, hasNumDevices := ParseAnnotation[uint64](&pod.ObjectMeta, KaiNumDevicesAnnotation)
+	if requestBytes == nil && !hasFraction && !hasMemory && !hasNumDevices {
 		return
 	}
 
@@ -439,6 +445,14 @@ func addKaiContainers(pod *corev1.Pod, desired map[string]*model.GpuContainer) {
 		containerID,
 		model.KaiScheduler,
 		func(gc *model.GpuContainer) {
+			if hasNumDevices {
+				gc.GPUNumDevices = new(numDevices)
+			}
+			if requestBytes != nil {
+				gc.GpuMemoryRequestBytes = requestBytes
+				gc.GpuMemoryLimitBytes = limitBytes
+				return
+			}
 			if hasFraction {
 				gc.GpuFraction = new(fraction)
 				if limit, ok := ParseAnnotation[float64](&pod.ObjectMeta, KaiFractionLimitAnnotation); ok {
@@ -447,19 +461,42 @@ func addKaiContainers(pod *corev1.Pod, desired map[string]*model.GpuContainer) {
 			}
 			if hasMemory {
 				gc.GpuMemory = new(memory)
-				limit, err := resource.ParseQuantity(pod.Annotations[KaiMemoryLimitAnnotation])
-				if err == nil && limit.Sign() > 0 && limit.CmpInt64(math.MaxInt64) <= 0 {
-					gc.GpuMemoryLimitBytes = new(uint64(limit.Value()))
-				}
-			}
-			if hasNumDevices {
-				gc.GPUNumDevices = new(numDevices)
+				gc.GpuMemoryLimitBytes = parseKaiMemoryBytes(pod.Annotations[KaiMemoryLimitAnnotation])
 			}
 		},
 	)
 }
 
+func nvFractionsMemoryKeys(containerName string) (request, limit string) {
+	prefix := "nvidia.com/container." + containerName + ".gpu-memory."
+	return prefix + "request", prefix + "limit"
+}
+
+func parseKaiMemoryBytes(raw string) *uint64 {
+	quantity, err := resource.ParseQuantity(raw)
+	if err != nil || quantity.Sign() <= 0 || quantity.CmpInt64(math.MaxInt64) > 0 {
+		return nil
+	}
+	bytes := uint64(quantity.Value())
+	if bytes < model.MiB {
+		return nil
+	}
+	return &bytes
+}
+
 func selectKaiContainer(pod *corev1.Pod) (corev1.Container, bool, bool) {
+	// KAI can add native annotations to pods that already have shorthand annotations.
+	for index, containers := range [2][]corev1.Container{pod.Spec.Containers, pod.Spec.InitContainers} {
+		for _, container := range containers {
+			requestKey, limitKey := nvFractionsMemoryKeys(container.Name)
+			_, hasRequest := pod.Annotations[requestKey]
+			_, hasLimit := pod.Annotations[limitKey]
+			if hasRequest || hasLimit {
+				return container, index == 1, true
+			}
+		}
+	}
+
 	if name, ok := pod.Annotations[KaiFractionContainerAnnotation]; ok && strings.TrimSpace(name) != "" {
 		for _, container := range pod.Spec.Containers {
 			if container.Name == name {
@@ -543,6 +580,7 @@ func updateGpuContainer(dst, src *model.GpuContainer) {
 	dst.GpuFraction = src.GpuFraction
 	dst.GpuFractionLimit = src.GpuFractionLimit
 	dst.GpuMemory = src.GpuMemory
+	dst.GpuMemoryRequestBytes = src.GpuMemoryRequestBytes
 	dst.GpuMemoryLimitBytes = src.GpuMemoryLimitBytes
 	dst.GPUNumDevices = src.GPUNumDevices
 	dst.ResetCalculatedValues()

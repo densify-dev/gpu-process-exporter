@@ -401,6 +401,69 @@ func TestKaiLimits(t *testing.T) {
 	}
 }
 
+func TestNvFractionsMemoryAnnotations(t *testing.T) {
+	for _, tt := range []struct {
+		name, request, limit string
+		initContainer        bool
+		withShorthand        bool
+		want                 model.CalculatedValues
+	}{
+		{
+			name:    "request only",
+			request: "4Gi",
+			want:    model.CalculatedValues{Requests: 0.5, Limits: 0.5, TotalMemory: 4096 * model.MiB},
+		},
+		{
+			name:          "limit only on init container",
+			limit:         "8Gi",
+			initContainer: true,
+			want:          model.CalculatedValues{Requests: 1, Limits: 1, TotalMemory: 8192 * model.MiB},
+		},
+		{
+			name:          "native takes precedence over shorthand",
+			request:       "4Gi",
+			limit:         "8Gi",
+			withShorthand: true,
+			want:          model.CalculatedValues{Requests: 0.5, Limits: 1, TotalMemory: 8192 * model.MiB},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			const containerName = "gpu-worker"
+			const containerID = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+			pod := newIrrelevantPod("nvfractions")
+			container := corev1.Container{Name: containerName}
+			status := runningStatus(containerName, containerID)
+			if tt.initContainer {
+				pod.Spec.InitContainers = []corev1.Container{container}
+				pod.Status.InitContainerStatuses = []corev1.ContainerStatus{status}
+			} else {
+				pod.Spec.Containers = append(pod.Spec.Containers, container)
+				pod.Status.ContainerStatuses = append(pod.Status.ContainerStatuses, status)
+			}
+			pod.Annotations = map[string]string{KaiNumDevicesAnnotation: "2"}
+			if tt.request != "" {
+				pod.Annotations["nvidia.com/container.gpu-worker.gpu-memory.request"] = tt.request
+			}
+			if tt.limit != "" {
+				pod.Annotations["nvidia.com/container.gpu-worker.gpu-memory.limit"] = tt.limit
+			}
+			if tt.withShorthand {
+				pod.Annotations[KaiMemoryAnnotation] = "4096"
+			}
+
+			desired := desiredGpuContainersForPod(pod)
+			gc := desired[containerID]
+			if len(desired) != 1 || gc == nil || gc.ContainerName != containerName {
+				t.Fatalf("expected only %s to be tracked, got %+v", containerName, desired)
+			}
+			device := &model.DeviceInfo{TotalMemory: 16384 * model.MiB}
+			if got := gc.GetCalculatedValues(device); got == nil || *got != tt.want {
+				t.Fatalf("got %+v, want %+v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestDesiredGpuContainersForPodTracksKaiNumDevices(t *testing.T) {
 	pod := newIrrelevantPod("kai-num-devices")
 	pod.Annotations = map[string]string{
