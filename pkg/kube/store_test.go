@@ -30,6 +30,7 @@ const (
 	mainContainerName    = "main"
 	kaiInitContainerName = "kai-init"
 	testMetricHelpStore  = "test metric"
+	testKaiMemoryLimit   = "8Gi"
 )
 
 func TestStoreInitialSyncFindsRelevantPods(t *testing.T) {
@@ -364,7 +365,7 @@ func TestKaiLimits(t *testing.T) {
 		name, requestKey, request, limitKey, limit string
 	}{
 		{"fraction", "gpu-fraction", "0.25", "gpu-fraction.limit", "0.5"},
-		{"memory", "gpu-memory", "4096", "gpu-memory.limit", "8Gi"},
+		{"memory", "gpu-memory", "4096", "gpu-memory.limit", testKaiMemoryLimit},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			pod := newIrrelevantPod("kai-limit")
@@ -415,14 +416,14 @@ func TestNvFractionsMemoryAnnotations(t *testing.T) {
 		},
 		{
 			name:          "limit only on init container",
-			limit:         "8Gi",
+			limit:         testKaiMemoryLimit,
 			initContainer: true,
 			want:          model.CalculatedValues{Requests: 1, Limits: 1, TotalMemory: 8192 * model.MiB},
 		},
 		{
 			name:          "native takes precedence over shorthand",
 			request:       "4Gi",
-			limit:         "8Gi",
+			limit:         testKaiMemoryLimit,
 			withShorthand: true,
 			want:          model.CalculatedValues{Requests: 0.5, Limits: 1, TotalMemory: 8192 * model.MiB},
 		},
