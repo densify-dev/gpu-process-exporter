@@ -213,12 +213,23 @@ func (gc *GpuContainer) calculate(devInfo *DeviceInfo) (requests, limits, totalM
 			limits = *limit
 		}
 		totalMemory *= limits
-	} else if gc.GpuMemoryRequestBytes != nil || gc.GpuMemory != nil {
-		if gc.GpuMemoryRequestBytes != nil {
-			totalMemory = float64(*gc.GpuMemoryRequestBytes)
-		} else {
-			totalMemory = float64(*gc.GpuMemory) * MiB
+	} else if gc.GpuMemoryRequestBytes != nil {
+		requestBytes := *gc.GpuMemoryRequestBytes
+		limitBytes := requestBytes
+		if limit := gc.GpuMemoryLimitBytes; limit != nil && *limit >= requestBytes {
+			limitBytes = *limit
 		}
+		// KAI schedules whole MiB rounded down; fractiond enforces whole MiB rounded up.
+		requests = float64(requestBytes/MiB) * MiB / totalMemory
+		limitMiB := limitBytes / MiB
+		if limitBytes%MiB != 0 {
+			limitMiB++
+		}
+		limitMemory := float64(limitMiB) * MiB
+		limits = limitMemory / totalMemory
+		totalMemory = limitMemory
+	} else if gc.GpuMemory != nil {
+		totalMemory = float64(*gc.GpuMemory) * MiB
 		requests = totalMemory / float64(devInfo.TotalMemory)
 		if limit := gc.GpuMemoryLimitBytes; limit != nil && *limit >= MiB && float64(*limit) >= totalMemory {
 			totalMemory = float64(*limit)

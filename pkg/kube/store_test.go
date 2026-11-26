@@ -403,6 +403,7 @@ func TestKaiLimits(t *testing.T) {
 }
 
 func TestNvFractionsMemoryAnnotations(t *testing.T) {
+	const nonWholeMiB = "1536Ki"
 	for _, tt := range []struct {
 		name, request, limit string
 		initContainer        bool
@@ -426,6 +427,22 @@ func TestNvFractionsMemoryAnnotations(t *testing.T) {
 			limit:         testKaiMemoryLimit,
 			withShorthand: true,
 			want:          model.CalculatedValues{Requests: 0.5, Limits: 1, TotalMemory: 8192 * model.MiB},
+		},
+		{
+			name:    "non-whole-MiB request only",
+			request: nonWholeMiB,
+			want:    model.CalculatedValues{Requests: 2.0 / 16384, Limits: 4.0 / 16384, TotalMemory: 2 * model.MiB},
+		},
+		{
+			name:  "non-whole-MiB limit only",
+			limit: nonWholeMiB,
+			want:  model.CalculatedValues{Requests: 2.0 / 16384, Limits: 4.0 / 16384, TotalMemory: 2 * model.MiB},
+		},
+		{
+			name:    "non-whole-MiB request and explicit limit",
+			request: nonWholeMiB,
+			limit:   "2560Ki",
+			want:    model.CalculatedValues{Requests: 2.0 / 16384, Limits: 6.0 / 16384, TotalMemory: 3 * model.MiB},
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
