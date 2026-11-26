@@ -30,6 +30,7 @@ const (
 	mainContainerName    = "main"
 	kaiInitContainerName = "kai-init"
 	testMetricHelpStore  = "test metric"
+	testKaiMemoryLimit   = "8Gi"
 )
 
 func TestStoreInitialSyncFindsRelevantPods(t *testing.T) {
@@ -359,6 +360,154 @@ func TestStoreZeroesCurrentGaugesWhenContainerFinishes(t *testing.T) {
 	}
 }
 
+func TestKaiLimits(t *testing.T) {
+	for _, tt := range []struct {
+		name, requestKey, request, limitKey, limit string
+	}{
+		{"fraction", "gpu-fraction", "0.25", "gpu-fraction.limit", "0.5"},
+		{"memory", "gpu-memory", "4096", "gpu-memory.limit", testKaiMemoryLimit},
+		{"non-whole-MiB memory limit", KaiMemoryAnnotation, "4096", KaiMemoryLimitAnnotation, "8191.5Mi"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			pod := newIrrelevantPod("kai-limit")
+			pod.Annotations = map[string]string{
+				tt.requestKey:           tt.request,
+				tt.limitKey:             tt.limit,
+				KaiNumDevicesAnnotation: "2",
+			}
+			id := normalizeContainerID(pod.Status.ContainerStatuses[0].ContainerID)
+			device := &model.DeviceInfo{TotalMemory: 16384 * model.MiB}
+			container := desiredGpuContainersForPod(pod)[id]
+			if container == nil {
+				t.Fatal("expected GPU container")
+			}
+			want := model.CalculatedValues{Requests: 0.5, Limits: 1, TotalMemory: 8192 * model.MiB}
+			if got := container.GetCalculatedValues(device); got == nil || *got != want {
+				t.Fatalf("with explicit limit: got %+v, want %+v", got, want)
+			}
+
+			delete(pod.Annotations, tt.limitKey)
+			updateGpuContainer(container, desiredGpuContainersForPod(pod)[id])
+			want = model.CalculatedValues{Requests: 0.5, Limits: 0.5, TotalMemory: 4096 * model.MiB}
+			if got := container.GetCalculatedValues(device); got == nil || *got != want {
+				t.Fatalf("after removing limit: got %+v, want %+v", got, want)
+			}
+
+			pod.Annotations[tt.limitKey] = tt.limit
+			updateGpuContainer(container, desiredGpuContainersForPod(pod)[id])
+			want = model.CalculatedValues{Requests: 0.5, Limits: 1, TotalMemory: 8192 * model.MiB}
+			if got := container.GetCalculatedValues(device); got == nil || *got != want {
+				t.Fatalf("after restoring limit: got %+v, want %+v", got, want)
+			}
+		})
+	}
+}
+
+func TestNvFractionsMemoryAnnotations(t *testing.T) {
+	const nonWholeMiB = "1536Ki"
+	for _, tt := range []struct {
+		name, request, limit string
+		initContainer        bool
+		withShorthand        bool
+		want                 model.CalculatedValues
+	}{
+		{
+			name:    "request only",
+			request: "4Gi",
+			want:    model.CalculatedValues{Requests: 0.5, Limits: 0.5, TotalMemory: 4096 * model.MiB},
+		},
+		{
+			name:          "limit only on init container",
+			limit:         testKaiMemoryLimit,
+			initContainer: true,
+			want:          model.CalculatedValues{Requests: 1, Limits: 1, TotalMemory: 8192 * model.MiB},
+		},
+		{
+			name:          "native takes precedence over shorthand",
+			request:       "4Gi",
+			limit:         testKaiMemoryLimit,
+			withShorthand: true,
+			want:          model.CalculatedValues{Requests: 0.5, Limits: 1, TotalMemory: 8192 * model.MiB},
+		},
+		{
+			name:    "non-whole-MiB request only",
+			request: nonWholeMiB,
+			want:    model.CalculatedValues{Requests: 2.0 / 16384, Limits: 4.0 / 16384, TotalMemory: 2 * model.MiB},
+		},
+		{
+			name:  "non-whole-MiB limit only",
+			limit: nonWholeMiB,
+			want:  model.CalculatedValues{Requests: 2.0 / 16384, Limits: 4.0 / 16384, TotalMemory: 2 * model.MiB},
+		},
+		{
+			name:    "non-whole-MiB request and explicit limit",
+			request: nonWholeMiB,
+			limit:   "2560Ki",
+			want:    model.CalculatedValues{Requests: 2.0 / 16384, Limits: 6.0 / 16384, TotalMemory: 3 * model.MiB},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			const containerName = "gpu-worker"
+			const containerID = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+			pod := newIrrelevantPod("nvfractions")
+			container := corev1.Container{Name: containerName}
+			status := runningStatus(containerName, containerID)
+			if tt.initContainer {
+				pod.Spec.InitContainers = []corev1.Container{container}
+				pod.Status.InitContainerStatuses = []corev1.ContainerStatus{status}
+			} else {
+				pod.Spec.Containers = append(pod.Spec.Containers, container)
+				pod.Status.ContainerStatuses = append(pod.Status.ContainerStatuses, status)
+			}
+			pod.Annotations = map[string]string{KaiNumDevicesAnnotation: "2"}
+			if tt.request != "" {
+				pod.Annotations["nvidia.com/container.gpu-worker.gpu-memory.request"] = tt.request
+			}
+			if tt.limit != "" {
+				pod.Annotations["nvidia.com/container.gpu-worker.gpu-memory.limit"] = tt.limit
+			}
+			if tt.withShorthand {
+				pod.Annotations[KaiMemoryAnnotation] = "4096"
+			}
+
+			desired := desiredGpuContainersForPod(pod)
+			gc := desired[containerID]
+			if len(desired) != 1 || gc == nil || gc.ContainerName != containerName {
+				t.Fatalf("expected only %s to be tracked, got %+v", containerName, desired)
+			}
+			device := &model.DeviceInfo{TotalMemory: 16384 * model.MiB}
+			if got := gc.GetCalculatedValues(device); got == nil || *got != tt.want {
+				t.Fatalf("got %+v, want %+v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestNvFractionsRejectsInvalidNativeMemory(t *testing.T) {
+	const subMiB = "512Ki"
+	for _, tt := range []struct {
+		name, request, limit string
+	}{
+		{"sub-MiB request", subMiB, testKaiMemoryLimit},
+		{"malformed request", "typo", testKaiMemoryLimit},
+		{"empty request", "", testKaiMemoryLimit},
+		{"sub-MiB limit", "1Mi", subMiB},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			pod := newIrrelevantPod("invalid-nvfractions")
+			requestKey, limitKey := nvFractionsMemoryKeys(mainContainerName)
+			pod.Annotations = map[string]string{
+				requestKey:            tt.request,
+				limitKey:              tt.limit,
+				KaiFractionAnnotation: "0.25",
+			}
+			if desired := desiredGpuContainersForPod(pod); len(desired) != 0 {
+				t.Fatalf("tracked %d containers with invalid native memory annotations", len(desired))
+			}
+		})
+	}
+}
+
 func TestDesiredGpuContainersForPodTracksKaiNumDevices(t *testing.T) {
 	pod := newIrrelevantPod("kai-num-devices")
 	pod.Annotations = map[string]string{
@@ -385,13 +534,13 @@ func TestDesiredGpuContainersForPodTracksKaiNumDevices(t *testing.T) {
 	}
 }
 
-func TestDesiredGpuContainersForPodSkipsKaiInitContainerWithoutAlwaysRestartPolicy(t *testing.T) {
-	restartPolicy := corev1.ContainerRestartPolicyOnFailure
+func TestDesiredGpuContainersForPodTracksKaiRunToCompletionInitContainer(t *testing.T) {
+	const initContainerID = "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "kai-init-skip",
+			Name:      "kai-init",
 			Namespace: testNamespace,
-			UID:       types.UID("kai-init-skip-uid"),
+			UID:       types.UID("kai-init-uid"),
 			Annotations: map[string]string{
 				KaiFractionAnnotation:          "0.5",
 				KaiFractionContainerAnnotation: kaiInitContainerName,
@@ -403,10 +552,7 @@ func TestDesiredGpuContainersForPodSkipsKaiInitContainerWithoutAlwaysRestartPoli
 				{Name: mainContainerName},
 			},
 			InitContainers: []corev1.Container{
-				{
-					Name:          kaiInitContainerName,
-					RestartPolicy: &restartPolicy,
-				},
+				{Name: kaiInitContainerName},
 			},
 		},
 		Status: corev1.PodStatus{
@@ -414,13 +560,15 @@ func TestDesiredGpuContainersForPodSkipsKaiInitContainerWithoutAlwaysRestartPoli
 				runningStatus(mainContainerName, "abababababababababababababababababababababababababababababababab"),
 			},
 			InitContainerStatuses: []corev1.ContainerStatus{
-				runningStatus(kaiInitContainerName, "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"),
+				runningStatus(kaiInitContainerName, initContainerID),
 			},
 		},
 	}
 
-	if desired := desiredGpuContainersForPod(pod); len(desired) != 0 {
-		t.Fatalf("len(desired) = %d, want 0", len(desired))
+	desired := desiredGpuContainersForPod(pod)
+	container := desired[initContainerID]
+	if len(desired) != 1 || container == nil || container.ContainerName != kaiInitContainerName {
+		t.Fatalf("expected only %s to be tracked, got %+v", kaiInitContainerName, desired)
 	}
 }
 

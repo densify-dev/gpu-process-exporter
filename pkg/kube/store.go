@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math"
 	"strings"
 	"sync"
 	"time"
@@ -19,6 +20,7 @@ import (
 	"github.com/densify-dev/gpu-process-exporter/pkg/value"
 	authorizationv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/types"
@@ -36,7 +38,9 @@ const (
 	KaiResourceReservationNamespace  = "kai-resource-reservation"
 	KaiResourceReservationAnnotation = "run.ai/reserve_for_gpu_index"
 	KaiFractionAnnotation            = "gpu-fraction"
+	KaiFractionLimitAnnotation       = "gpu-fraction.limit"
 	KaiMemoryAnnotation              = "gpu-memory"
+	KaiMemoryLimitAnnotation         = "gpu-memory.limit"
 	KaiFractionContainerAnnotation   = "gpu-fraction-container-name"
 	KaiNumDevicesAnnotation          = "gpu-fraction-num-devices"
 	nodeNameKey                      = "spec.nodeName"
@@ -407,15 +411,29 @@ func addK8sContainerIfGPURequested(
 }
 
 func addKaiContainers(pod *corev1.Pod, desired map[string]*model.GpuContainer) {
-	fraction, hasFraction := ParseAnnotation[float64](&pod.ObjectMeta, KaiFractionAnnotation)
-	memory, hasMemory := ParseAnnotation[uint64](&pod.ObjectMeta, KaiMemoryAnnotation)
-	numDevices, hasNumDevices := ParseAnnotation[uint64](&pod.ObjectMeta, KaiNumDevicesAnnotation)
-	if !hasFraction && !hasMemory && !hasNumDevices {
+	if len(pod.Annotations) == 0 {
+		return
+	}
+	container, initContainer, ok := selectKaiContainer(pod)
+	if !ok {
 		return
 	}
 
-	container, initContainer, ok := selectKaiContainer(pod)
-	if !ok {
+	requestKey, limitKey := nvFractionsMemoryKeys(container.Name)
+	rawRequest, hasRequest := pod.Annotations[requestKey]
+	rawLimit, hasLimit := pod.Annotations[limitKey]
+	requestBytes := parseKaiMemoryBytes(rawRequest)
+	limitBytes := parseKaiMemoryBytes(rawLimit)
+	if (hasRequest && requestBytes == nil) || (hasLimit && limitBytes == nil) {
+		return
+	}
+	if !hasRequest {
+		requestBytes = limitBytes
+	}
+	fraction, hasFraction := ParseAnnotation[float64](&pod.ObjectMeta, KaiFractionAnnotation)
+	memory, hasMemory := ParseAnnotation[uint64](&pod.ObjectMeta, KaiMemoryAnnotation)
+	numDevices, hasNumDevices := ParseAnnotation[uint64](&pod.ObjectMeta, KaiNumDevicesAnnotation)
+	if requestBytes == nil && !hasFraction && !hasMemory && !hasNumDevices {
 		return
 	}
 
@@ -435,20 +453,58 @@ func addKaiContainers(pod *corev1.Pod, desired map[string]*model.GpuContainer) {
 		containerID,
 		model.KaiScheduler,
 		func(gc *model.GpuContainer) {
+			if hasNumDevices {
+				gc.GPUNumDevices = new(numDevices)
+			}
+			if requestBytes != nil {
+				gc.GpuMemoryRequestBytes = requestBytes
+				gc.GpuMemoryLimitBytes = limitBytes
+				return
+			}
 			if hasFraction {
 				gc.GpuFraction = new(fraction)
+				if limit, ok := ParseAnnotation[float64](&pod.ObjectMeta, KaiFractionLimitAnnotation); ok {
+					gc.GpuFractionLimit = new(limit)
+				}
 			}
 			if hasMemory {
 				gc.GpuMemory = new(memory)
-			}
-			if hasNumDevices {
-				gc.GPUNumDevices = new(numDevices)
+				gc.GpuMemoryLimitBytes = parseKaiMemoryBytes(pod.Annotations[KaiMemoryLimitAnnotation])
 			}
 		},
 	)
 }
 
+func nvFractionsMemoryKeys(containerName string) (request, limit string) {
+	prefix := "nvidia.com/container." + containerName + ".gpu-memory."
+	return prefix + "request", prefix + "limit"
+}
+
+func parseKaiMemoryBytes(raw string) *uint64 {
+	quantity, err := resource.ParseQuantity(raw)
+	if err != nil || quantity.Sign() <= 0 || quantity.CmpInt64(math.MaxInt64) > 0 {
+		return nil
+	}
+	bytes := uint64(quantity.Value())
+	if bytes < model.MiB {
+		return nil
+	}
+	return &bytes
+}
+
 func selectKaiContainer(pod *corev1.Pod) (corev1.Container, bool, bool) {
+	// KAI can add native annotations to pods that already have shorthand annotations.
+	for index, containers := range [2][]corev1.Container{pod.Spec.Containers, pod.Spec.InitContainers} {
+		for _, container := range containers {
+			requestKey, limitKey := nvFractionsMemoryKeys(container.Name)
+			_, hasRequest := pod.Annotations[requestKey]
+			_, hasLimit := pod.Annotations[limitKey]
+			if hasRequest || hasLimit {
+				return container, index == 1, true
+			}
+		}
+	}
+
 	if name, ok := pod.Annotations[KaiFractionContainerAnnotation]; ok && strings.TrimSpace(name) != "" {
 		for _, container := range pod.Spec.Containers {
 			if container.Name == name {
@@ -456,13 +512,9 @@ func selectKaiContainer(pod *corev1.Pod) (corev1.Container, bool, bool) {
 			}
 		}
 		for _, container := range pod.Spec.InitContainers {
-			if container.Name != name {
-				continue
+			if container.Name == name {
+				return container, true, true
 			}
-			if container.RestartPolicy == nil || *container.RestartPolicy != corev1.ContainerRestartPolicyAlways {
-				return corev1.Container{}, false, false
-			}
-			return container, true, true
 		}
 		return corev1.Container{}, false, false
 	}
@@ -530,7 +582,10 @@ func updateGpuContainer(dst, src *model.GpuContainer) {
 	dst.GpuRequest = src.GpuRequest
 	dst.GpuLimit = src.GpuLimit
 	dst.GpuFraction = src.GpuFraction
+	dst.GpuFractionLimit = src.GpuFractionLimit
 	dst.GpuMemory = src.GpuMemory
+	dst.GpuMemoryRequestBytes = src.GpuMemoryRequestBytes
+	dst.GpuMemoryLimitBytes = src.GpuMemoryLimitBytes
 	dst.GPUNumDevices = src.GPUNumDevices
 	dst.ResetCalculatedValues()
 	if labelsChanged {
