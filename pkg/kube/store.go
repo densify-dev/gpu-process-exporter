@@ -411,15 +411,23 @@ func addK8sContainerIfGPURequested(
 }
 
 func addKaiContainers(pod *corev1.Pod, desired map[string]*model.GpuContainer) {
+	if len(pod.Annotations) == 0 {
+		return
+	}
 	container, initContainer, ok := selectKaiContainer(pod)
 	if !ok {
 		return
 	}
 
 	requestKey, limitKey := nvFractionsMemoryKeys(container.Name)
-	requestBytes := parseKaiMemoryBytes(pod.Annotations[requestKey])
-	limitBytes := parseKaiMemoryBytes(pod.Annotations[limitKey])
-	if requestBytes == nil {
+	rawRequest, hasRequest := pod.Annotations[requestKey]
+	rawLimit, hasLimit := pod.Annotations[limitKey]
+	requestBytes := parseKaiMemoryBytes(rawRequest)
+	limitBytes := parseKaiMemoryBytes(rawLimit)
+	if (hasRequest && requestBytes == nil) || (hasLimit && limitBytes == nil) {
+		return
+	}
+	if !hasRequest {
 		requestBytes = limitBytes
 	}
 	fraction, hasFraction := ParseAnnotation[float64](&pod.ObjectMeta, KaiFractionAnnotation)
@@ -504,13 +512,9 @@ func selectKaiContainer(pod *corev1.Pod) (corev1.Container, bool, bool) {
 			}
 		}
 		for _, container := range pod.Spec.InitContainers {
-			if container.Name != name {
-				continue
+			if container.Name == name {
+				return container, true, true
 			}
-			if container.RestartPolicy == nil || *container.RestartPolicy != corev1.ContainerRestartPolicyAlways {
-				return corev1.Container{}, false, false
-			}
-			return container, true, true
 		}
 		return corev1.Container{}, false, false
 	}

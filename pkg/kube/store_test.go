@@ -465,6 +465,31 @@ func TestNvFractionsMemoryAnnotations(t *testing.T) {
 	}
 }
 
+func TestNvFractionsRejectsInvalidNativeMemory(t *testing.T) {
+	const subMiB = "512Ki"
+	for _, tt := range []struct {
+		name, request, limit string
+	}{
+		{"sub-MiB request", subMiB, testKaiMemoryLimit},
+		{"malformed request", "typo", testKaiMemoryLimit},
+		{"empty request", "", testKaiMemoryLimit},
+		{"sub-MiB limit", "1Mi", subMiB},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			pod := newIrrelevantPod("invalid-nvfractions")
+			requestKey, limitKey := nvFractionsMemoryKeys(mainContainerName)
+			pod.Annotations = map[string]string{
+				requestKey:            tt.request,
+				limitKey:              tt.limit,
+				KaiFractionAnnotation: "0.25",
+			}
+			if desired := desiredGpuContainersForPod(pod); len(desired) != 0 {
+				t.Fatalf("tracked %d containers with invalid native memory annotations", len(desired))
+			}
+		})
+	}
+}
+
 func TestDesiredGpuContainersForPodTracksKaiNumDevices(t *testing.T) {
 	pod := newIrrelevantPod("kai-num-devices")
 	pod.Annotations = map[string]string{
@@ -491,13 +516,13 @@ func TestDesiredGpuContainersForPodTracksKaiNumDevices(t *testing.T) {
 	}
 }
 
-func TestDesiredGpuContainersForPodSkipsKaiInitContainerWithoutAlwaysRestartPolicy(t *testing.T) {
-	restartPolicy := corev1.ContainerRestartPolicyOnFailure
+func TestDesiredGpuContainersForPodTracksKaiRunToCompletionInitContainer(t *testing.T) {
+	const initContainerID = "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "kai-init-skip",
+			Name:      "kai-init",
 			Namespace: testNamespace,
-			UID:       types.UID("kai-init-skip-uid"),
+			UID:       types.UID("kai-init-uid"),
 			Annotations: map[string]string{
 				KaiFractionAnnotation:          "0.5",
 				KaiFractionContainerAnnotation: kaiInitContainerName,
@@ -509,10 +534,7 @@ func TestDesiredGpuContainersForPodSkipsKaiInitContainerWithoutAlwaysRestartPoli
 				{Name: mainContainerName},
 			},
 			InitContainers: []corev1.Container{
-				{
-					Name:          kaiInitContainerName,
-					RestartPolicy: &restartPolicy,
-				},
+				{Name: kaiInitContainerName},
 			},
 		},
 		Status: corev1.PodStatus{
@@ -520,13 +542,15 @@ func TestDesiredGpuContainersForPodSkipsKaiInitContainerWithoutAlwaysRestartPoli
 				runningStatus(mainContainerName, "abababababababababababababababababababababababababababababababab"),
 			},
 			InitContainerStatuses: []corev1.ContainerStatus{
-				runningStatus(kaiInitContainerName, "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"),
+				runningStatus(kaiInitContainerName, initContainerID),
 			},
 		},
 	}
 
-	if desired := desiredGpuContainersForPod(pod); len(desired) != 0 {
-		t.Fatalf("len(desired) = %d, want 0", len(desired))
+	desired := desiredGpuContainersForPod(pod)
+	container := desired[initContainerID]
+	if len(desired) != 1 || container == nil || container.ContainerName != kaiInitContainerName {
+		t.Fatalf("expected only %s to be tracked, got %+v", kaiInitContainerName, desired)
 	}
 }
 
